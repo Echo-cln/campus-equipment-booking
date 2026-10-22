@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#fff5e6" />
+  <meta name="description" content="物尽其用：校园共享设备预约与使用登记。" />
+  <title>物尽其用｜校园共享设备预约与使用登记</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="config.js"></script>
+  <script src="api.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="物尽其用首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48"><path d="M8 35V15c8 0 13 4 16 12 3-8 8-12 16-12v20c-8 0-13 2-16 6-3-4-8-6-16-6Z"/><path d="M24 27v14"/></svg>
+        </span>
+        <span class="brand-name">物尽其用</span>
+        <span class="brand-divider"></span>
+        <span class="brand-subtitle">校园共享设备 · 预约与登记</span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a class="nav-link active" href="#home">首页</a>
+        <a class="nav-link" href="#devices">设备一览</a>
+        <a class="nav-link" href="#guide">使用说明</a>
+        <a class="nav-link" href="#notices">公告</a>
+      </nav>
+      <div class="top-actions">
+        <div class="role-switch" role="group" aria-label="切换角色">
+          <button class="role-button is-active" data-role="user" aria-pressed="true">使用者</button>
+          <button class="role-button" data-role="admin" aria-pressed="false">管理员</button>
+        </div>
+        <button class="server-status" id="serverStatus" type="button" title="查看服务端连接状态">
+          <span class="status-dot"></span><span class="status-label">连接中</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero" aria-labelledby="heroTitle">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-rule"></span>校园工坊 · 共享设备服务</p>
+          <h1 id="heroTitle">今天，想用哪件？</h1>
+          <p class="hero-description">查看设备使用情况与开放时段，选择日期后提交预约。</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 620 220" role="img">
+            <path class="art-wash" d="M0 190c72-35 104-11 178-34 72-23 119-6 181-13 87-10 142 19 261-1v78H0Z"/>
+            <path class="art-line" d="M55 191V90h74v101m-64-85h53m-44 0v85m24-85v85m31-80 70-38v118m-49-91h25v28h-25zm0 41h25v28h-25zm59-79h19v19h-19zM230 191V60h128v131m-114-116h99m-99 22h99m-99 22h99m-99 22h99m-83-66v121m30-121v121m30-121v121m32-129 78 31v98m-62-80h48m-48 20h48m-48 20h48m-48 20h48m70-89v89m33-111v111m0-92h63m-63 23h63m-63 23h63m-63 23h63"/>
+            <path class="art-detail" d="M20 191h575M82 88V68m29 18V54m112 28V55m24 3V42m27 16V42m28 16V42m26 16V42m25 25V47m74 52V80m76 14V72m26 22V64m30 30V73"/>
+            <circle class="art-sun" cx="515" cy="46" r="20"/>
+            <path class="art-leaf" d="M574 188c-8-22-2-40 20-54m-7 31c-20-3-28-14-28-31 15 1 25 8 28 23m-2 28c3-20 15-31 34-34-1 15-9 27-27 34"/>
+            <path class="art-leaf" d="M20 192c-5-16-1-29 14-39m-5 23c-14-2-20-10-20-22 11 1 18 6 20 16m-1 22c2-15 11-23 25-25-1 11-7 20-20 25"/>
+          </svg>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="共享设备预约工作区">
+        <aside class="device-panel panel" id="devices">
+          <div class="panel-heading device-heading">
+            <div><span class="section-index">01 / CATALOG</span><h2>设备索引</h2></div>
+            <span class="record-count" id="deviceCount">— 件设备</span>
+          </div>
+          <label class="search-box">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>
+            <input id="deviceSearch" type="search" placeholder="搜索名称、编号或用途" autocomplete="off" />
+            <span class="sr-only">搜索设备</span>
+          </label>
+          <div class="category-tabs" id="categoryTabs" role="tablist" aria-label="设备分类">
+            <button class="category-tab is-active" data-category="全部" role="tab" aria-selected="true">全部</button>
+            <button class="category-tab" data-category="制造加工" role="tab" aria-selected="false">制造加工</button>
+            <button class="category-tab" data-category="影像拍摄" role="tab" aria-selected="false">影像拍摄</button>
+            <button class="category-tab" data-category="电子电工" role="tab" aria-selected="false">电子电工</button>
+            <button class="category-tab" data-category="其他" role="tab" aria-selected="false">其他</button>
+          </div>
+          <div class="device-list" id="deviceList" aria-live="polite">
+            <div class="loading-state"><span class="spinner"></span><span>正在读取设备目录…</span></div>
+          </div>
+          <div class="pagination" id="devicePagination" aria-label="设备列表分页">
+            <span id="pageLabel">第 — 页</span>
+            <div><button class="icon-button" id="prevPage" aria-label="上一页" disabled>‹</button><button class="icon-button" id="nextPage" aria-label="下一页" disabled>›</button></div>
+          </div>
+        </aside>
+
+        <section class="main-panel" aria-label="日历与使用登记">
+          <div class="calendar-panel panel">
+            <div class="calendar-toolbar">
+              <div class="calendar-title-wrap">
+                <span class="section-index">02 / CALENDAR</span>
+                <div class="calendar-title-row"><h2 id="monthTitle">日历</h2><span class="selected-device-label" id="selectedDeviceLabel">选择设备查看使用日期</span></div>
+              </div>
+              <div class="calendar-actions">
+                <div class="view-switch" role="group" aria-label="日历视图"><button class="view-button is-active" data-view="month">月</button><button class="view-button" data-view="week">周</button><button class="view-button" data-view="day">日</button></div>
+                <div class="calendar-nav"><button class="icon-button" id="prevMonth" aria-label="上个月">‹</button><button class="icon-button" id="nextMonth" aria-label="下个月">›</button></div>
+              </div>
+            </div>
+            <div class="calendar-legend"><span><i class="legend-dot dot-mine"></i>我的预约</span><span><i class="legend-dot dot-busy"></i>已被预约</span><span><i class="legend-dot dot-free"></i>可预约</span></div>
+            <div class="calendar-grid" id="calendarGrid" aria-label="日历">
+              <div class="calendar-weekdays"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
+              <div class="calendar-days" id="calendarDays"><div class="empty-calendar">连接服务端后显示可预约日期</div></div>
+            </div>
+          </div>
+
+          <section class="usage-panel panel" id="usagePanel" aria-labelledby="usageTitle">
+            <div class="usage-heading">
+              <div><span class="section-index">03 / DAILY LOG</span><h2 id="usageTitle">当日使用登记</h2></div>
+              <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已使用</button><button data-usage="idle">空闲</button></div></div>
+            </div>
+            <div class="usage-table-wrap">
+              <table class="usage-table"><thead><tr><th>时段</th><th>设备</th><th>使用者</th><th>用途</th><th>状态</th></tr></thead><tbody id="usageRows"><tr><td colspan="5" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
+            </div>
+            <div class="usage-pagination"><span id="usagePageLabel">—</span><div><button class="icon-button" id="usagePrev" aria-label="上一页" disabled>‹</button><button class="icon-button" id="usageNext" aria-label="下一页" disabled>›</button></div></div>
+            <div class="usage-footer"><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button><p class="footer-hint" id="bookingHint">选择设备和日期后，可以提交预约</p><span class="review-note">预约提交后由管理员确认</span></div>
+          </section>
+
+          <section class="admin-panel panel" id="adminPanel" hidden>
+            <div class="admin-heading"><div><span class="section-index">04 / OVERVIEW</span><h2>设备使用统计</h2><p>选择设备，比较所选周期内的使用次数。</p></div><label class="period-select">统计周期<select id="statsPeriod"><option value="month">本月</option><option value="quarter">本季度</option><option value="year">本学年</option></select></label></div>
+            <div class="stats-layout"><div class="stats-device-list" id="statsDeviceList"><p class="table-empty">正在读取设备目录…</p></div><div class="chart-card"><div class="chart-title"><div><span class="section-index">USE COUNT</span><h3>设备使用次数对比</h3></div><span id="statsRange"></span></div><div class="bar-chart" id="statsChart"><p class="table-empty">选择设备后查看统计</p></div></div></div>
+          </section>
+        </section>
+      </section>
+
+      <footer class="site-footer" id="guide"><span>物尽其用 <i>·</i> 校园共享设备预约与使用登记</span><span id="offlineNote">数据由课程模拟服务端提供</span><a href="#notices">使用说明</a></footer>
+      <div class="sr-only" id="notices" aria-label="公告">设备预约需按服务端返回的可用时段提交。</div>
+    </main>
+  </div>
+
+  <dialog class="booking-dialog" id="bookingDialog" aria-labelledby="bookingTitle">
+    <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭">×</button></form>
+    <span class="section-index">REQUEST / RESERVATION</span><h2 id="bookingTitle">提交设备预约</h2>
+    <p class="dialog-intro">选择一件设备和最多五个日期。提交后由服务端检查时段冲突。</p>
+    <form id="bookingForm">
+      <label class="field-label" for="bookingDevice">预约设备</label><select id="bookingDevice" required></select>
+      <label class="field-label" for="bookingDatePicker">预约日期 <span>最多 5 天</span></label>
+      <div class="date-picker-row"><input id="bookingDatePicker" type="date" /><button class="secondary-button" type="button" id="addBookingDate">添加日期</button></div>
+      <div class="selected-dates" id="selectedDates"></div>
+      <label class="field-label" for="bookingPurpose">用途说明</label><input id="bookingPurpose" maxlength="120" placeholder="请简要填写使用用途" />
+      <p class="form-message" id="bookingMessage" role="status"></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button" id="cancelBooking">取消</button><button type="submit" class="primary-button" id="submitBooking">提交预约</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
