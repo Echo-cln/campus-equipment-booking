@@ -3,5 +3,7 @@
 window.SITE_CONFIG = Object.freeze({
   apiBaseUrl: "",
   requestTimeoutMs: 8000,
-  pageSize: 5
+  pageSize: 5,
+  calendarMinYear: 2000,
+  calendarMaxYear: 2100
 });

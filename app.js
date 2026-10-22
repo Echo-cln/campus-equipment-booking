@@ -4,13 +4,15 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const pageSize = Number((window.SITE_CONFIG || {}).pageSize) || 5;
   const today = new Date();
+  const calendarMinYear = Number((window.SITE_CONFIG || {}).calendarMinYear) || 2000;
+  const calendarMaxYear = Number((window.SITE_CONFIG || {}).calendarMaxYear) || 2100;
   const state = {
-    role: localStorage.getItem("wu-jin-qi-yong:role") || "user",
+    role: "user", adminView: true,
     page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
     currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false,
     usageStatus: "used", usagePage: 1, usageTotal: 0, bookingMode: false, bookingDates: [], statsSelection: [],
-    statsPeriod: "month", statsRequestId: 0, currentHistoryDevice: null, stale: false, searchTimer: null
+    statsPeriod: "all", statsRange: null, statsRows: [], statsRequestId: 0, currentHistoryDevice: null, stale: false, searchTimer: null
   };
 
   const escapeHtml = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
@@ -42,6 +44,64 @@
     return (d.getMonth() + 1) + "月" + d.getDate() + "日 · 使用登记";
   };
   const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+  function initCalendarPicker() {
+    const yearSelect = $("#calendarYear");
+    const monthSelect = $("#calendarMonth");
+    for (let year = calendarMaxYear; year >= calendarMinYear; year--) {
+      yearSelect.add(new Option(year + " 年", String(year)));
+    }
+    for (let month = 1; month <= 12; month++) {
+      monthSelect.add(new Option(month + " 月", String(month)));
+    }
+    const minDate = calendarMinYear + "-01-01";
+    const maxDate = calendarMaxYear + "-12-31";
+    $("#statsStartDate").min = minDate;
+    $("#statsStartDate").max = maxDate;
+    $("#statsEndDate").min = minDate;
+    $("#statsEndDate").max = maxDate;
+    $("#calendarYear").value = String(state.currentYear);
+    $("#calendarMonth").value = String(state.currentMonth);
+  }
+  function showLogin() {
+    document.body.classList.remove("is-authenticated");
+    $("#loginScreen").hidden = false;
+    $("#loginError").textContent = "";
+  }
+  async function enterDemoSession(role, account, persist = true) {
+    state.role = role;
+    state.adminView = role === "admin";
+    if (persist) localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account }));
+    document.body.classList.add("is-authenticated");
+    $("#loginScreen").hidden = true;
+    $("#identityChip").textContent = "课程演示 · " + (role === "admin" ? "管理员" : "使用者");
+    setRoleView();
+    if (!state.allDevices.length) await loadDevices();
+    else if (role === "admin") { renderStatsDeviceOptions(); loadStatistics(); }
+  }
+  function handleDemoLogin(event) {
+    event.preventDefault();
+    const accounts = {
+      student: { password: "demo123", role: "user" },
+      admin: { password: "demo123", role: "admin" }
+    };
+    const account = $("#loginAccount").value.trim().toLowerCase();
+    const password = $("#loginPassword").value;
+    const match = accounts[account];
+    if (!match || match.password !== password) {
+      $("#loginError").textContent = "账号或密码不正确，请使用下方课程演示账号。";
+      $("#loginPassword").value = "";
+      return;
+    }
+    $("#loginError").textContent = "";
+    enterDemoSession(match.role, account);
+  }
+  function logoutDemo() {
+    localStorage.removeItem("wu-jin-qi-yong:demo-session");
+    state.role = "user";
+    state.adminView = false;
+    showLogin();
+    $("#loginPassword").value = "";
+  }
   function notify(message) {
     const toast = $("#toast");
     toast.textContent = message;
@@ -217,6 +277,8 @@
 
   function renderCalendar(error) {
     $("#monthTitle").textContent = state.currentYear + "年" + String(state.currentMonth).padStart(2, "0") + "月";
+    $("#calendarYear").value = String(state.currentYear);
+    $("#calendarMonth").value = String(state.currentMonth);
     const grid = $("#calendarDays");
     const first = new Date(state.currentYear, state.currentMonth - 1, 1);
     const firstOffset = (first.getDay() + 6) % 7;
@@ -420,18 +482,24 @@
   function selectedStatDevices() {
     return state.allDevices.filter((device) => state.statsSelection.includes(deviceId(device)));
   }
-  function renderStatsSummary(devices = selectedStatDevices()) {
-    const counts = devices.map(deviceCount);
+  function currentStatRows() {
+    if (state.statsPeriod === "all") return selectedStatDevices().map((device) => ({
+      No: deviceId(device), Name: deviceName(device), UseCount: deviceCount(device)
+    }));
+    return state.statsRows;
+  }
+  function renderStatsSummary(rows = currentStatRows()) {
+    const counts = rows.map((row) => num(row.UseCount));
     const total = counts.reduce((sum, count) => sum + count, 0);
-    const average = devices.length ? total / devices.length : null;
+    const average = rows.length ? total / rows.length : null;
     const topIndex = counts.length ? counts.indexOf(Math.max(...counts)) : -1;
     const formatCount = (value) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value);
-    $("#selectedDeviceTotal").textContent = formatCount(devices.length);
+    $("#selectedDeviceTotal").textContent = formatCount(state.statsSelection.length);
     $("#selectedUsageTotal").textContent = formatCount(total);
     $("#selectedUsageAverage").textContent = average === null ? "—" : formatCount(average);
-    $("#mostUsedDevice").textContent = topIndex < 0 ? "—" : deviceName(devices[topIndex]);
-    $("#mostUsedDevice").title = topIndex < 0 ? "" : deviceName(devices[topIndex]) + " · " + formatCount(counts[topIndex]) + " 次";
-    $("#mostUsedCount").textContent = topIndex < 0 ? "使用最多设备" : formatCount(counts[topIndex]) + " 次使用";
+    $("#mostUsedDevice").textContent = topIndex < 0 ? "—" : rows[topIndex].Name;
+    $("#mostUsedDevice").title = topIndex < 0 ? "" : rows[topIndex].Name + " · " + formatCount(counts[topIndex]) + " 次";
+    $("#mostUsedCount").textContent = topIndex < 0 ? "使用最多设备" : formatCount(counts[topIndex]) + (state.statsPeriod === "all" ? " 次使用" : " 次登记");
   }
   function updateCurrentPageSelect() {
     const visible = filteredDevices().slice((state.page - 1) * pageSize, state.page * pageSize);
@@ -472,51 +540,141 @@
     updateCurrentPageSelect();
     renderStatsSummary();
   }
+  function setStatsHeading(range) {
+    const isCumulative = state.statsPeriod === "all";
+    const isPendingCustom = state.statsPeriod === "custom" && !range;
+    $("#statsChartTitle").textContent = isCumulative ? "设备累计使用次数对比" : "设备区间登记次数对比";
+    $("#statsRange").textContent = isCumulative ? "累计使用" : (range ? range.start + " 至 " + range.end : "待选区间");
+    $("#selectedUsageTotalLabel").textContent = isCumulative ? "使用次数合计" : "区间登记次数合计";
+    $("#selectedUsageAverageLabel").textContent = isCumulative ? "平均使用次数" : "平均区间登记次数";
+    $("#statsPeriodNote").textContent = isCumulative ? "累计统计沿用 UseCount" : "区间统计依据 UseDate 登记记录";
+    $("#statsChartCaption").textContent = isCumulative
+      ? "累计次数取自设备目录的 UseCount 字段。"
+      : "按服务端记录中的 UseDate 统计该日期范围内的登记次数；接口没有实际完成状态字段。";
+    if (isPendingCustom) $("#statsChart").innerHTML = '<p class="table-empty">请选择开始日期和结束日期，再点击“应用区间”。</p>';
+  }
+  function resolveStatsRange(period) {
+    if (period === "all") return null;
+    if (period === "custom") return state.statsRange;
+    const end = dateKey(today);
+    if (period === "month") return { start: end.slice(0, 7) + "-01", end };
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 29);
+    return { start: dateKey(startDate), end };
+  }
+  function renderStatsChart(rows, range) {
+    const node = $("#statsChart");
+    if (!rows.length) {
+      node.innerHTML = '<p class="table-empty">' + (state.stale ? "缓存中没有该范围的设备登记记录" : "服务端暂未返回统计数据") + "</p>";
+      return;
+    }
+    const sorted = rows.slice().sort((a, b) => num(b.UseCount) - num(a.UseCount));
+    const maximum = Math.max(1, ...sorted.map((row) => num(row.UseCount)));
+    node.innerHTML = sorted.map((row) => {
+      const count = num(row.UseCount);
+      return '<div class="bar-row"><span class="bar-name" title="' + escapeHtml(row.Name) + '">' + escapeHtml(row.Name) + '</span><div class="bar-track"><div class="bar-fill" style="--bar-width:' + Math.round(count / maximum * 100) + '%"></div></div><span class="bar-value">' + new Intl.NumberFormat("zh-CN").format(count) + "</span></div>";
+    }).join("");
+    setStatsHeading(range);
+  }
   async function loadStatistics() {
     const node = $("#statsChart");
     const requestId = ++state.statsRequestId;
-    renderStatsSummary();
+    const range = resolveStatsRange(state.statsPeriod);
+    setStatsHeading(range);
     if (!state.statsSelection.length) {
-      node.innerHTML = '<p class="table-empty">请在左侧设备列表中勾选设备，这里会显示使用次数对比柱状图。</p>';
+      state.statsRows = [];
+      renderStatsSummary([]);
+      node.innerHTML = '<p class="table-empty">请在左侧勾选设备，查看累计次数或所选日期范围内的登记次数。</p>';
       return;
     }
+    if (state.statsPeriod === "custom" && !range) {
+      state.statsRows = [];
+      renderStatsSummary([]);
+      return;
+    }
+    renderStatsSummary();
+    node.innerHTML = '<p class="table-empty"><span class="spinner"></span>正在读取统计数据…</p>';
     try {
-      const result = await window.Service.getStatistics({ deviceIds: state.statsSelection });
+      const result = state.statsPeriod === "all"
+        ? await window.Service.getStatistics({ deviceIds: state.statsSelection })
+        : await window.Service.getRangeStatistics({ deviceIds: state.statsSelection, start: range.start, end: range.end });
       if (requestId !== state.statsRequestId) return;
       updateConnection(result);
-      const rows = listFrom(result.data, ["items", "statistics", "stats", "devices", "rows"]);
-      if (!rows.length) {
-        node.innerHTML = '<p class="table-empty">' + (state.stale ? "缓存中没有该统计结果" : "服务端暂未返回统计数据") + "</p>";
-        return;
-      }
-      const counts = rows.map((item) => num(field(item, ["UseCount", "count", "usageCount", "useCount", "total", "value"], 0)));
-      const maximum = Math.max(1, ...counts);
-      node.innerHTML = rows.map((item, index) => {
-        const name = String(field(item, ["Name", "deviceName", "name", "label"], deviceName(state.allDevices.find((d) => deviceId(d) === String(field(item, ["No", "deviceId", "id", "code"]))) || {})));
-        const count = counts[index];
-        return '<div class="bar-row"><span class="bar-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><div class="bar-track"><div class="bar-fill" style="--bar-width:' + Math.round(count / maximum * 100) + '%"></div></div><span class="bar-value">' + new Intl.NumberFormat("zh-CN").format(count) + "</span></div>";
-      }).join("");
+      const returned = listFrom(result.data, ["items", "statistics", "stats", "devices", "rows"]);
+      const rows = returned.map((item) => {
+        const id = String(field(item, ["No", "deviceId", "id", "code"], ""));
+        const device = state.allDevices.find((entry) => deviceId(entry) === id);
+        return {
+          No: id,
+          Name: String(field(item, ["Name", "deviceName", "name", "label"], device ? deviceName(device) : id)),
+          UseCount: num(field(item, ["UseCount", "count", "usageCount", "useCount", "total", "value"], 0))
+        };
+      });
+      state.statsRows = rows;
+      renderStatsSummary(rows);
+      renderStatsChart(rows, range);
     } catch (error) {
       if (requestId !== state.statsRequestId) return;
+      state.statsRows = [];
+      renderStatsSummary([]);
       node.innerHTML = '<p class="table-empty">' + escapeHtml(error.message) + "</p>";
       showError(error.message);
     }
   }
-  function setRole(role) {
-    if (role === "admin" && state.role !== "admin") {
-      state.page = 1;
-      state.search = "";
+  function setRoleView() {
+    $(".workspace").hidden = state.role === "admin" && state.adminView;
+    $("#adminPanel").hidden = state.role !== "admin" || !state.adminView;
+    $("#adminNavLink").hidden = state.role !== "admin";
+    if (state.role === "admin" && state.adminView) { renderStatsDeviceOptions(); loadStatistics(); }
+  }
+  function changeMonth(offset) {
+    state.currentMonth += offset;
+    if (state.currentMonth < 1) { state.currentMonth = 12; state.currentYear--; }
+    if (state.currentMonth > 12) { state.currentMonth = 1; state.currentYear++; }
+    if (state.currentYear < calendarMinYear) { state.currentYear = calendarMinYear; state.currentMonth = 1; }
+    if (state.currentYear > calendarMaxYear) { state.currentYear = calendarMaxYear; state.currentMonth = 12; }
+    state.calendarReady = false;
+    loadCalendar();
+  }
+  function applyCalendarMonth() {
+    const year = Number($("#calendarYear").value);
+    const month = Number($("#calendarMonth").value);
+    if (year < calendarMinYear || year > calendarMaxYear || month < 1 || month > 12) return;
+    state.currentYear = year;
+    state.currentMonth = month;
+    state.currentView = "month";
+    $$(".view-button").forEach((button) => button.classList.toggle("is-active", button.dataset.view === "month"));
+    $("#monthYearPicker").hidden = true;
+    $("#monthPickerToggle").setAttribute("aria-expanded", "false");
+    state.calendarReady = false;
+    loadCalendar();
+  }
+  function setStatsPeriod(period) {
+    state.statsPeriod = period;
+    $("#customStatsRange").hidden = period !== "custom";
+    $("#statsRangeError").textContent = "";
+    if (period === "custom") {
+      const end = dateKey(today);
+      $("#statsStartDate").value = state.statsRange?.start || end.slice(0, 7) + "-01";
+      $("#statsEndDate").value = state.statsRange?.end || end;
+      state.statsRange = null;
+    } else {
+      state.statsRange = resolveStatsRange(period);
     }
-    state.role = role;
-    localStorage.setItem("wu-jin-qi-yong:role", role);
-    $$(".role-button").forEach((button) => {
-      const active = button.dataset.role === role;
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-    $(".workspace").hidden = role === "admin";
-    $("#adminPanel").hidden = role !== "admin";
-    if (role === "admin") { renderStatsDeviceOptions(); loadStatistics(); }
+    loadStatistics();
+  }
+  function applyCustomStatsRange() {
+    const start = $("#statsStartDate").value;
+    const end = $("#statsEndDate").value;
+    const startYear = Number(start.slice(0, 4));
+    const endYear = Number(end.slice(0, 4));
+    if (!start || !end || start > end || startYear < calendarMinYear || endYear > calendarMaxYear) {
+      $("#statsRangeError").textContent = "请选择有效范围：开始日期不得晚于结束日期，年份需在 " + calendarMinYear + "—" + calendarMaxYear + " 之间。";
+      return;
+    }
+    state.statsRange = { start, end };
+    $("#statsRangeError").textContent = "";
+    loadStatistics();
   }
   function changeMonth(offset) {
     state.currentMonth += offset;
@@ -526,7 +684,18 @@
     loadCalendar();
   }
   function bindEvents() {
-    $$(".role-button").forEach((button) => button.addEventListener("click", () => setRole(button.dataset.role)));
+    $("#loginForm").addEventListener("submit", handleDemoLogin);
+    $("#logoutButton").addEventListener("click", logoutDemo);
+    $$(".nav-link").forEach((link) => link.addEventListener("click", () => {
+      $$(".nav-link").forEach((item) => item.classList.toggle("active", item === link));
+      if (link.id === "adminNavLink" && state.role === "admin") {
+        state.adminView = true;
+        setRoleView();
+      } else if (link.getAttribute("href") === "#devices" && state.role === "admin") {
+        state.adminView = false;
+        setRoleView();
+      }
+    }));
     $("#prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderDevices(); } });
     $("#nextPage").addEventListener("click", () => { if (state.page * pageSize < filteredDevices().length) { state.page++; renderDevices(); } });
     $("#statsPrev").addEventListener("click", () => { if (state.page > 1) { state.page--; renderStatsDeviceOptions(); } });
@@ -553,6 +722,31 @@
     });
     $("#prevMonth").addEventListener("click", () => changeMonth(-1));
     $("#nextMonth").addEventListener("click", () => changeMonth(1));
+    $("#monthPickerToggle").addEventListener("click", () => {
+      const picker = $("#monthYearPicker");
+      picker.hidden = !picker.hidden;
+      $("#monthPickerToggle").setAttribute("aria-expanded", String(!picker.hidden));
+      if (!picker.hidden) {
+        $("#calendarYear").value = String(state.currentYear);
+        $("#calendarMonth").value = String(state.currentMonth);
+        $("#calendarYear").focus();
+      }
+    });
+    $("#applyCalendarMonth").addEventListener("click", applyCalendarMonth);
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".calendar-title-wrap") && !$("#monthYearPicker").hidden) {
+        $("#monthYearPicker").hidden = true;
+        $("#monthPickerToggle").setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !$("#monthYearPicker").hidden) {
+        $("#monthYearPicker").hidden = true;
+        $("#monthPickerToggle").setAttribute("aria-expanded", "false");
+      }
+    });
+    $("#statsPeriod").addEventListener("change", (event) => setStatsPeriod(event.target.value));
+    $("#applyStatsRange").addEventListener("click", applyCustomStatsRange);
     $$(".view-button").forEach((button) => button.addEventListener("click", () => {
       state.currentView = button.dataset.view;
       $$(".view-button").forEach((item) => item.classList.toggle("is-active", item === button));
@@ -598,13 +792,24 @@
   }
   async function start() {
     bindEvents();
+    initCalendarPicker();
     state.selectedDate = dateKey(today);
     state.currentView = "month";
     $("#usageDate").textContent = prettyDate(state.selectedDate);
-    setStatus("连接中", "", "正在连接课程模拟服务端");
-    setRole(state.role);
-    await loadDevices();
-    if (!state.selectedDeviceId) renderCalendar();
+    localStorage.removeItem("wu-jin-qi-yong:role");
+    const saved = localStorage.getItem("wu-jin-qi-yong:demo-session");
+    if (!saved) { showLogin(); return; }
+    try {
+      const session = JSON.parse(saved);
+      const valid = (session.account === "student" && session.role === "user") || (session.account === "admin" && session.role === "admin");
+      if (!valid) throw new Error("invalid demo session");
+      setStatus("连接中", "", "正在连接课程模拟服务端");
+      await enterDemoSession(session.role, session.account, false);
+    } catch {
+      localStorage.removeItem("wu-jin-qi-yong:demo-session");
+      showLogin();
+    }
+    if (!state.selectedDeviceId && document.body.classList.contains("is-authenticated")) renderCalendar();
   }
   start();
 })();

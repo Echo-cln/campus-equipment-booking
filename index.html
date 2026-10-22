@@ -13,6 +13,28 @@
   <script src="app.js" defer></script>
 </head>
 <body>
+  <section class="login-screen" id="loginScreen">
+    <section class="login-story" aria-label="服务介绍">
+      <a class="brand login-brand" href="#home" aria-label="物尽其用">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 35V15c8 0 13 4 16 12 3-8 8-12 16-12v20c-8 0-13 2-16 6-3-4-8-6-16-6Z"/><path d="M24 27v14"/></svg></span><span class="brand-name">物尽其用</span>
+      </a>
+      <p class="eyebrow"><span class="eyebrow-rule"></span>校园共享设备 · 课程演示</p>
+      <h1>让每一次借用，<br>都有迹可循。</h1>
+      <p>从查找设备、查看日期到提交预约，把分散的设备信息和使用记录放进一个清楚的工作台。</p>
+      <div class="login-story-note"><span>01</span><span>设备一览</span><i></i><span>02</span><span>预约登记</span><i></i><span>03</span><span>使用统计</span></div>
+    </section>
+    <section class="login-panel" aria-labelledby="loginTitle">
+      <div class="login-panel-heading"><span class="section-index">DEMO ACCESS</span><h2 id="loginTitle">进入设备工作台</h2><p>请选择课程演示账号登录。</p></div>
+      <form id="loginForm" class="login-form">
+        <label for="loginAccount">账号</label><input id="loginAccount" name="account" autocomplete="username" required placeholder="输入演示账号" />
+        <label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="输入演示密码" />
+        <p class="login-error" id="loginError" role="alert"></p>
+        <button class="primary-button login-submit" type="submit">登录演示工作台 <span>→</span></button>
+      </form>
+      <div class="demo-credentials"><strong>演示账号</strong><span>使用者：student / demo123</span><span>管理员：admin / demo123</span></div>
+      <p class="demo-limit">此处为前端课程演示账号，不连接真实身份认证服务；管理员身份不能用于真实权限控制。</p>
+    </section>
+  </section>
   <div class="page-shell">
     <header class="topbar">
       <a class="brand" href="#home" aria-label="物尽其用首页">
@@ -28,15 +50,14 @@
         <a class="nav-link" href="#devices">设备一览</a>
         <a class="nav-link" href="#guide">使用说明</a>
         <a class="nav-link" href="#notices">公告</a>
+        <a class="nav-link admin-nav-link" id="adminNavLink" href="#adminPanel" hidden>后台统计</a>
       </nav>
       <div class="top-actions">
-        <div class="role-switch" role="group" aria-label="切换角色">
-          <button class="role-button is-active" data-role="user" aria-pressed="true">使用者</button>
-          <button class="role-button" data-role="admin" aria-pressed="false">管理员</button>
-        </div>
+        <span class="identity-chip" id="identityChip">课程演示 · 使用者</span>
         <button class="server-status" id="serverStatus" type="button" title="查看服务端连接状态">
           <span class="status-dot"></span><span class="status-label">连接中</span>
         </button>
+        <button class="logout-button" id="logoutButton" type="button">退出</button>
       </div>
     </header>
 
@@ -84,7 +105,12 @@
             <div class="calendar-toolbar">
               <div class="calendar-title-wrap">
                 <span class="section-index">02 / CALENDAR</span>
-                <div class="calendar-title-row"><h2 id="monthTitle">日历</h2><span class="selected-device-label" id="selectedDeviceLabel">选择设备查看使用日期</span></div>
+                <div class="calendar-title-row"><button class="month-picker-trigger" id="monthPickerToggle" type="button" aria-expanded="false" aria-controls="monthYearPicker"><h2 id="monthTitle">日历</h2><span aria-hidden="true">⌄</span></button><span class="selected-device-label" id="selectedDeviceLabel">选择设备查看使用日期</span></div>
+                <div class="month-year-picker" id="monthYearPicker" hidden>
+                  <label for="calendarYear">年份</label><select id="calendarYear" aria-label="选择年份"></select>
+                  <label for="calendarMonth">月份</label><select id="calendarMonth" aria-label="选择月份"></select>
+                  <button class="secondary-button" id="applyCalendarMonth" type="button">查看此月</button>
+                </div>
               </div>
               <div class="calendar-actions">
                 <div class="view-switch" role="group" aria-label="日历视图"><button class="view-button is-active" data-view="month">月</button><button class="view-button" data-view="week">周</button><button class="view-button" data-view="day">日</button></div>
@@ -132,20 +158,52 @@
           </div>
           <div class="stats-summary" aria-label="已选设备汇总">
             <article class="summary-card"><strong id="selectedDeviceTotal">0</strong><span>已选设备</span></article>
-            <article class="summary-card"><strong id="selectedUsageTotal">0</strong><span>使用次数合计</span></article>
-            <article class="summary-card"><strong id="selectedUsageAverage">—</strong><span>平均使用次数</span></article>
+            <article class="summary-card"><strong id="selectedUsageTotal">0</strong><span id="selectedUsageTotalLabel">使用次数合计</span></article>
+            <article class="summary-card"><strong id="selectedUsageAverage">—</strong><span id="selectedUsageAverageLabel">平均使用次数</span></article>
             <article class="summary-card"><strong class="summary-top" id="mostUsedDevice">—</strong><span id="mostUsedCount">使用最多设备</span></article>
           </div>
           <div class="chart-card admin-chart-card">
-            <div class="chart-title"><div><span class="section-index">USE COUNT</span><h3>设备累计使用次数对比</h3></div><span class="cumulative-badge" id="statsRange">累计使用</span></div>
-            <p class="chart-caption">次数取自设备目录的 UseCount 字段，反映各设备累计登记次数。</p>
+            <div class="chart-title"><div><span class="section-index">USE COUNT</span><h3 id="statsChartTitle">设备累计使用次数对比</h3></div><span class="cumulative-badge" id="statsRange">累计使用</span></div>
+            <div class="stats-period-toolbar">
+              <label for="statsPeriod">统计范围</label>
+              <select id="statsPeriod"><option value="all">累计</option><option value="month">本月</option><option value="30days">近 30 天</option><option value="custom">自定义日期</option></select>
+              <span class="stats-period-note" id="statsPeriodNote">累计统计沿用 UseCount</span>
+            </div>
+            <div class="custom-range" id="customStatsRange" hidden>
+              <label>开始日期 <input type="date" id="statsStartDate" /></label>
+              <span aria-hidden="true">至</span>
+              <label>结束日期 <input type="date" id="statsEndDate" /></label>
+              <button class="secondary-button" id="applyStatsRange" type="button">应用区间</button>
+              <p class="range-error" id="statsRangeError" role="alert"></p>
+            </div>
+            <p class="chart-caption" id="statsChartCaption">累计次数取自设备目录的 UseCount 字段。</p>
             <div class="bar-chart" id="statsChart"><p class="table-empty">请在左侧设备列表中勾选设备，这里会显示使用次数对比柱状图。</p></div>
           </div>
         </section>
       </section>
 
-      <footer class="site-footer" id="guide"><span>物尽其用 <i>·</i> 校园共享设备预约与使用登记</span><span id="offlineNote">数据由课程模拟服务端提供</span><a href="#notices">使用说明</a></footer>
-      <div class="sr-only" id="notices" aria-label="公告">设备预约需按服务端返回的可用时段提交。</div>
+      <section class="info-section guide-section" id="guide" aria-labelledby="guideTitle">
+        <div class="info-heading"><div><span class="section-index">HOW IT WORKS</span><h2 id="guideTitle">使用说明</h2><p>从启动课程服务端到完成一次预约，按下面的顺序操作。</p></div><span class="info-index">01—04</span></div>
+        <div class="guide-steps">
+          <article class="guide-step"><span>01</span><div><h3>启动模拟服务端</h3><p>先解压课程提供的服务端，在 Windows 上运行 <code>模拟服务端.exe</code>。保持程序窗口开启，确认 <code>Device.txt</code> 和 <code>Record.txt</code> 留在服务端要求的目录。</p></div></article>
+          <article class="guide-step"><span>02</span><div><h3>确认设备目录</h3><p>页面显示“服务端在线”后，在设备一览中搜索名称或编号。点击设备可查看日历和使用记录。</p></div></article>
+          <article class="guide-step"><span>03</span><div><h3>选日期并提交预约</h3><p>通过日历箭头或年月选择器定位日期，再点击“预约所选设备”。一次最多提交五个日期；冲突日期以服务端返回结果为准。</p></div></article>
+          <article class="guide-step"><span>04</span><div><h3>查看记录与统计</h3><p>管理员演示账号可查看设备累计次数和选定日期范围内的登记记录。日期范围统计按记录的 UseDate 计算，不代表服务端确认的实际完成使用。</p></div></article>
+        </div>
+        <div class="guide-terminal"><div><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span><span>Windows 终端 · 静态页面</span></div><code>cd E:\Programs\campus-equipment-booking<br>py -m http.server 5500</code><p>浏览器访问 <code>http://127.0.0.1:5500</code>。若页面仍离线，检查服务端是否运行及浏览器跨域提示。</p></div>
+        <details class="guide-faq"><summary>常见问题：接口地址能打开，页面却显示离线？</summary><p>通常是网页来源与服务端端口不同导致跨域请求被浏览器拦截。先打开浏览器开发者工具的 Console 查看报错，再按课程环境要求配置服务端跨域，或使用老师指定的页面运行方式。</p></details>
+      </section>
+
+      <section class="info-section notices-section" id="notices" aria-labelledby="noticesTitle">
+        <div class="info-heading"><div><span class="section-index">NOTICE BOARD</span><h2 id="noticesTitle">公告与须知</h2><p>预约和数据展示以课程模拟服务端的实际响应为准。</p></div><span class="info-index">02—04</span></div>
+        <div class="notice-grid">
+          <article class="notice-card notice-feature"><span class="notice-tag">服务状态</span><h3>先启动服务端，再打开工作台</h3><p>服务端窗口关闭、端口不可访问或跨域请求被拦截时，页面无法读取最新设备和记录。离线缓存仅供查看，不能提交预约。</p><span class="notice-foot">默认服务地址 · 127.0.0.1:12345</span></article>
+          <article class="notice-card"><span class="notice-tag">预约说明</span><h3>预约冲突由服务端校验</h3><p>提交前可以查看日历记录；最终是否成功仍以服务端返回为准。当前接口不支持撤销、审批或填写用途。</p></article>
+          <article class="notice-card"><span class="notice-tag">演示账号</span><h3>账号仅用于课程页面演示</h3><p>演示账号由前端校验，不是学校账号系统。管理员入口不具备真实访问控制，不要用于真实设备或敏感数据。</p></article>
+        </div>
+      </section>
+
+      <footer class="site-footer"><span>物尽其用 <i>·</i> 校园共享设备预约与使用登记</span><span id="offlineNote">数据由课程模拟服务端提供</span><a href="#home">回到首页 ↑</a></footer>
     </main>
   </div>
 

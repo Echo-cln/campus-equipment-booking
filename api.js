@@ -78,7 +78,13 @@
       online = false; lastError = error.message || "无法连接课程模拟服务端"; throw error;
     } finally { clearTimeout(timer); }
   }
-  const asList = (value) => Array.isArray(value) ? value : value && Array.isArray(value.items) ? value.items : [];
+  const asList = (value) => {
+    if (Array.isArray(value)) return value;
+    for (const key of ["items", "records", "list", "rows", "results"]) {
+      if (value && Array.isArray(value[key])) return value[key];
+    }
+    return [];
+  };
   const getDevices = async () => request(routes.devices, { page: 1, pageSize: 10000 });
   const getDeviceNos = async () => {
     const result = await request(routes.deviceNos);
@@ -115,6 +121,22 @@
   const getStatistics = async ({ deviceIds }) => getDevices().then((r) => ({
     ...r, data: asList(r.data).filter((d) => deviceIds.includes(String(d.No))).map((d) => ({ No: d.No, Name: d.Name, UseCount: d.UseCount }))
   }));
+  const getRangeStatistics = async ({ deviceIds, start, end }) => {
+    if (!start || !end || start > end) throw new Error("请填写有效的统计日期范围。");
+    const results = await Promise.all(deviceIds.map(async (id) => {
+      const response = await request(routes.recordsByNo, { no: id, start: dateParam(start), end: dateParam(end) });
+      const records = asList(response.data).filter((record) => {
+        const rawDate = String(record.UseDate || record.useDate || record.date || "");
+        const parts = rawDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        const date = parts
+          ? parts[1] + "-" + String(parts[2]).padStart(2, "0") + "-" + String(parts[3]).padStart(2, "0")
+          : formatDate(rawDate);
+        return date >= start && date <= end;
+      });
+      return { No: String(id), UseCount: records.length, stale: response.stale };
+    }));
+    return { data: { items: results.map(({ stale, ...row }) => row) }, stale: results.some((row) => row.stale) };
+  };
   async function createReservation({ deviceId, dates }) {
     const result = await request(routes.reservation, { No: deviceId, UseDates: dates.map(dateParam).join(",") }, false);
     const conflicts = asList(result.data);
@@ -127,6 +149,6 @@
   window.Service = Object.freeze({
     get online() { return online; }, get lastError() { return lastError; }, routes,
     checkHealth: () => getDevices(), getDevices, getDeviceNos, getCalendar, getDailyUsage,
-    getDeviceHistory, getStatistics, createReservation, formatDate, formatDateTime
+    getDeviceHistory, getStatistics, getRangeStatistics, createReservation, formatDate, formatDateTime
   });
 })();
