@@ -155,6 +155,9 @@ language sql stable security definer set search_path = '' as $$
   where r.status in ('pending','confirmed')
     and r.starts_at < p_to and r.ends_at > p_from
     and p_from < p_to
+    and p_to - p_from <= interval '32 days'
+    and p_from >= now() - interval '31 days'
+    and p_to <= now() + interval '366 days'
   order by r.starts_at;
 $$;
 

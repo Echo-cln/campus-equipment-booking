@@ -23,5 +23,6 @@ assert(auth.includes('"messages"'), "chat uses a server-backed messages table");
 for (const table of ["profiles", "equipment", "reservations", "messages", "issues", "waitlist", "announcements", "maintenance_windows"]) assert(sql.includes(`alter table public.${table} enable row level security`), `${table} has RLS enabled`);
 assert(sql.includes("exclude using gist"), "overlapping reservations are blocked in Postgres");
 assert(sql.includes("start_reservation_conversation"), "chat conversations require a validated reservation");
+assert(sql.includes("p_to - p_from <= interval '32 days'"), "public reservation lookup is range-limited");
 assert(!/service[_-]?role\s*[:=]/i.test(config), "browser configuration does not include a privileged key");
 console.log("Cloud setup checks passed: email auth, cloud records, reservation constraints, role checks and private chat.");
