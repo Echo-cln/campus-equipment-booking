@@ -10,7 +10,7 @@
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
     currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false,
     usageStatus: "used", usagePage: 1, usageTotal: 0, bookingMode: false, bookingDates: [], statsSelection: [],
-    statsPeriod: "month", currentHistoryDevice: null, stale: false, searchTimer: null
+    statsPeriod: "month", statsRequestId: 0, currentHistoryDevice: null, stale: false, searchTimer: null
   };
 
   const escapeHtml = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
@@ -105,6 +105,7 @@
     if (!visible.length) {
       container.innerHTML = '<div class="empty-state"><span class="empty-illustration">⌕</span><span>' +
         (state.stale ? "没有可用的缓存设备记录" : "服务端暂未返回设备记录") + "</span></div>";
+      renderStatsDeviceOptions();
       return;
     }
     container.innerHTML = visible.map((device, index) => {
@@ -142,6 +143,7 @@
       const result = await window.Service.getDevices();
       const payload = unwrap(result.data);
       state.allDevices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
+      state.statsSelection = state.statsSelection.filter((id) => state.allDevices.some((device) => deviceId(device) === id));
       state.devices = state.allDevices;
       state.totalDevices = filteredDevices().length;
       state.stale = !!result.stale;
@@ -415,31 +417,72 @@
     }
   }
 
+  function selectedStatDevices() {
+    return state.allDevices.filter((device) => state.statsSelection.includes(deviceId(device)));
+  }
+  function renderStatsSummary(devices = selectedStatDevices()) {
+    const counts = devices.map(deviceCount);
+    const total = counts.reduce((sum, count) => sum + count, 0);
+    const average = devices.length ? total / devices.length : null;
+    const topIndex = counts.length ? counts.indexOf(Math.max(...counts)) : -1;
+    const formatCount = (value) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value);
+    $("#selectedDeviceTotal").textContent = formatCount(devices.length);
+    $("#selectedUsageTotal").textContent = formatCount(total);
+    $("#selectedUsageAverage").textContent = average === null ? "—" : formatCount(average);
+    $("#mostUsedDevice").textContent = topIndex < 0 ? "—" : deviceName(devices[topIndex]);
+    $("#mostUsedDevice").title = topIndex < 0 ? "" : deviceName(devices[topIndex]) + " · " + formatCount(counts[topIndex]) + " 次";
+    $("#mostUsedCount").textContent = topIndex < 0 ? "使用最多设备" : formatCount(counts[topIndex]) + " 次使用";
+  }
+  function updateCurrentPageSelect() {
+    const visible = filteredDevices().slice((state.page - 1) * pageSize, state.page * pageSize);
+    const checkbox = $("#selectCurrentPage");
+    if (!checkbox) return;
+    const selected = visible.filter((device) => state.statsSelection.includes(deviceId(device))).length;
+    checkbox.checked = visible.length > 0 && selected === visible.length;
+    checkbox.indeterminate = selected > 0 && selected < visible.length;
+  }
   function renderStatsDeviceOptions() {
     const node = $("#statsDeviceList");
     if (!node) return;
+    const visible = filteredDevices().slice((state.page - 1) * pageSize, state.page * pageSize);
     if (!state.allDevices.length) {
-      node.innerHTML = '<p class="table-empty">服务端未返回设备</p>';
+      node.innerHTML = '<p class="table-empty">暂无设备数据</p>';
+      $("#statsPageLabel").textContent = "第 1 页";
+      $("#statsPrev").disabled = true;
+      $("#statsNext").disabled = true;
+      updateCurrentPageSelect();
+      renderStatsSummary([]);
       return;
     }
-    node.innerHTML = state.allDevices.map((device) => {
+    node.innerHTML = visible.map((device) => {
       const id = deviceId(device);
-      return '<label class="stats-device"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span>' + escapeHtml(deviceName(device)) + "</span></label>";
+      return '<label class="admin-device-row"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span class="admin-device-name">' + escapeHtml(deviceName(device)) + '</span><span class="admin-device-code">' + escapeHtml(id) + '</span><span class="admin-device-count">' + deviceCount(device) + ' 次</span></label>';
     }).join("");
-    $$('input[type="checkbox"]', node).forEach((input) => input.addEventListener("change", () => {
-      state.statsSelection = $$('input[type="checkbox"]:checked', node).map((item) => item.value);
+    $$('.admin-device-row input', node).forEach((input) => input.addEventListener("change", () => {
+      if (input.checked && !state.statsSelection.includes(input.value)) state.statsSelection.push(input.value);
+      if (!input.checked) state.statsSelection = state.statsSelection.filter((id) => id !== input.value);
+      updateCurrentPageSelect();
+      renderStatsSummary();
       loadStatistics();
     }));
+    const pages = Math.max(1, Math.ceil(filteredDevices().length / pageSize));
+    $("#statsPageLabel").textContent = "第 " + state.page + " / " + pages + " 页";
+    $("#statsPrev").disabled = state.page <= 1;
+    $("#statsNext").disabled = state.page >= pages;
+    updateCurrentPageSelect();
+    renderStatsSummary();
   }
   async function loadStatistics() {
     const node = $("#statsChart");
+    const requestId = ++state.statsRequestId;
+    renderStatsSummary();
     if (!state.statsSelection.length) {
-      node.innerHTML = '<p class="table-empty">选择一件或多件设备后查看统计</p>';
+      node.innerHTML = '<p class="table-empty">请在左侧设备列表中勾选设备，这里会显示使用次数对比柱状图。</p>';
       return;
     }
     try {
-      $("#statsRange").textContent = "累计使用次数";
       const result = await window.Service.getStatistics({ deviceIds: state.statsSelection });
+      if (requestId !== state.statsRequestId) return;
       updateConnection(result);
       const rows = listFrom(result.data, ["items", "statistics", "stats", "devices", "rows"]);
       if (!rows.length) {
@@ -451,14 +494,19 @@
       node.innerHTML = rows.map((item, index) => {
         const name = String(field(item, ["Name", "deviceName", "name", "label"], deviceName(state.allDevices.find((d) => deviceId(d) === String(field(item, ["No", "deviceId", "id", "code"]))) || {})));
         const count = counts[index];
-        return '<div class="bar-row"><span class="bar-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><div class="bar-track"><div class="bar-fill" style="--bar-width:' + Math.round(count / maximum * 100) + '%"></div></div><span class="bar-value">' + count + "</span></div>";
+        return '<div class="bar-row"><span class="bar-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><div class="bar-track"><div class="bar-fill" style="--bar-width:' + Math.round(count / maximum * 100) + '%"></div></div><span class="bar-value">' + new Intl.NumberFormat("zh-CN").format(count) + "</span></div>";
       }).join("");
     } catch (error) {
+      if (requestId !== state.statsRequestId) return;
       node.innerHTML = '<p class="table-empty">' + escapeHtml(error.message) + "</p>";
       showError(error.message);
     }
   }
   function setRole(role) {
+    if (role === "admin" && state.role !== "admin") {
+      state.page = 1;
+      state.search = "";
+    }
     state.role = role;
     localStorage.setItem("wu-jin-qi-yong:role", role);
     $$(".role-button").forEach((button) => {
@@ -466,10 +514,9 @@
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
     });
-    $(".calendar-panel").hidden = role === "admin";
-    $(".usage-panel").hidden = role === "admin";
+    $(".workspace").hidden = role === "admin";
     $("#adminPanel").hidden = role !== "admin";
-    if (role === "admin") loadStatistics();
+    if (role === "admin") { renderStatsDeviceOptions(); loadStatistics(); }
   }
   function changeMonth(offset) {
     state.currentMonth += offset;
@@ -482,6 +529,23 @@
     $$(".role-button").forEach((button) => button.addEventListener("click", () => setRole(button.dataset.role)));
     $("#prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderDevices(); } });
     $("#nextPage").addEventListener("click", () => { if (state.page * pageSize < filteredDevices().length) { state.page++; renderDevices(); } });
+    $("#statsPrev").addEventListener("click", () => { if (state.page > 1) { state.page--; renderStatsDeviceOptions(); } });
+    $("#statsNext").addEventListener("click", () => { if (state.page * pageSize < filteredDevices().length) { state.page++; renderStatsDeviceOptions(); } });
+    $("#selectCurrentPage").addEventListener("change", (event) => {
+      const ids = filteredDevices().slice((state.page - 1) * pageSize, state.page * pageSize).map(deviceId);
+      state.statsSelection = event.target.checked
+        ? Array.from(new Set(state.statsSelection.concat(ids)))
+        : state.statsSelection.filter((id) => !ids.includes(id));
+      renderStatsDeviceOptions(); loadStatistics();
+    });
+    $("#selectAllDevices").addEventListener("click", () => {
+      state.statsSelection = state.allDevices.map(deviceId);
+      renderStatsDeviceOptions(); loadStatistics();
+    });
+    $("#clearSelection").addEventListener("click", () => {
+      state.statsSelection = [];
+      renderStatsDeviceOptions(); loadStatistics();
+    });
     $("#deviceSearch").addEventListener("input", (event) => {
       clearTimeout(state.searchTimer);
       state.search = event.target.value.trim();
@@ -527,7 +591,7 @@
       state.bookingDates.sort();
       renderBookingDates();
     });
-    $("#statsPeriod").addEventListener("change", (event) => { state.statsPeriod = event.target.value; loadStatistics(); });
+
     $("#serverStatus").addEventListener("click", () => {
       notify(window.Service.online ? "当前已连接课程模拟服务端" : "当前离线，只能查看此前缓存的数据");
     });
