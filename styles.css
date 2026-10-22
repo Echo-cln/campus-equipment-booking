@@ -4,7 +4,8 @@
   --linen:#fff5e6;
   --paper:#fffaf2;
   --peach:#ffcdb0;
-  --honey:#ffd47f;
+  --honey:#dca77d;
+  --action:#668ca6;
   --sea:#b9d4cf;
   --harbor:#87a6bf;
   --wood:#b66e4a;
@@ -248,7 +249,7 @@ h1,h2,h3,p {
   stroke-dasharray:1 4
 }
 .art-sun {
-  fill:#edc879;
+  fill:#d89a74;
   opacity:.66
 }
 .art-leaf {
@@ -788,9 +789,9 @@ h1,h2,h3,p {
   transition:transform .16s,filter .16s
 }
 .primary-button {
-  background:var(--honey);
-  color:#352d20;
-  box-shadow:0 3px 8px rgba(181,133,46,.12)
+  background:var(--action);
+  color:#fffdf9;
+  box-shadow:0 3px 9px rgba(82,119,145,.17)
 }
 .primary-button:hover:not(:disabled) {
   filter:saturate(1.08);
@@ -2068,4 +2069,141 @@ body:not(.is-authenticated) .page-shell { display:none }
   .guide-step { grid-template-columns:32px minmax(0,1fr);gap:9px;padding:15px 12px }
   .guide-step>span { width:29px;height:29px }
   .guide-step h3 { font-size:15px }
+}
+
+/* Refined sign-in, device information, records and reservation feedback. */
+.login-screen {
+  position:fixed;
+  inset:0;
+  z-index:80;
+  display:block;
+  min-height:100vh;
+  overflow:auto;
+  background-color:var(--linen);
+  background-image:radial-gradient(rgba(124,93,52,.045) .65px,transparent .65px);
+  background-size:5px 5px
+}
+.login-shell { display:flex;min-height:100vh;flex-direction:column;max-width:1600px;margin:0 auto;padding:24px 42px 20px }
+.login-topbar { display:flex;align-items:center;justify-content:space-between;gap:15px;padding:0 0 17px;border-bottom:1px solid var(--line) }
+.login-topbar>span { color:#858277;font-size:12px;letter-spacing:.07em }
+.login-brand { position:static }
+.login-card-wrap { flex:1;display:grid;place-items:center;padding:30px 0 }
+.login-panel {
+  width:min(100%,510px);
+  margin:0;
+  padding:37px 42px 31px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(255,250,242,.94);
+  box-shadow:var(--shadow)
+}
+.login-panel-heading .section-index { color:#8b8b78;font-size:10px;letter-spacing:.12em }
+.login-panel-heading h1 { margin:12px 0 9px;font-family:"Songti SC","Noto Serif SC",serif;font-size:clamp(31px,4vw,43px);font-weight:600;letter-spacing:.045em;line-height:1.4 }
+.login-panel-heading p { margin:0;color:#77786f;font-size:13px }
+.login-form { margin-top:24px;gap:7px }
+.login-form label { margin-top:7px;color:#5f655e;font-size:12px }
+.login-form input { border-color:#d9cbb6;border-radius:6px;background:#fffdf8 }
+.login-form input:focus { border-color:var(--blue);box-shadow:0 0 0 3px rgba(102,140,166,.14) }
+.login-submit { width:100%;min-height:45px;margin-top:7px;border-radius:6px }
+.demo-credentials { margin-top:19px;border-color:#e2d7c5;border-radius:8px;background:#f6f0e6 }
+.demo-limit { color:#89867b }
+.login-footer { display:flex;align-items:center;gap:13px;padding-top:14px;border-top:1px solid var(--line);color:#878276;font-size:11px }
+.login-footer i { width:25px;height:1px;background:#cbbba5 }
+.login-footer span:nth-of-type(2) { color:#668ca6 }
+.usage-data-note { margin:-2px 0 14px;color:#8b8579;font-size:11px;line-height:1.7 }
+.usage-table-wrap { overflow-x:auto;border:1px solid var(--line-soft);border-radius:8px }
+.usage-table { min-width:760px;border:0 }
+.usage-table th { padding:11px 12px;background:#f4eee4;color:#777266;font-size:11px;font-weight:600;white-space:nowrap }
+.usage-table td { padding:12px;vertical-align:middle;color:#5d5e56;font-size:11px;line-height:1.55 }
+.usage-device-cell strong,.usage-device-name { display:block }
+.usage-device-cell strong { color:#484a43;font-size:12px;font-weight:600 }
+.usage-device-name { margin-top:4px;color:#8e877b;font-size:10px }
+.table-status.unavailable,.admin-device-state.unavailable { background:#fae3d7;color:#9e5944 }
+.table-contact {
+  padding:6px 9px;
+  border:1px solid #d4dfe4;
+  border-radius:6px;
+  background:#f2f7f9;
+  color:#59798c;
+  cursor:pointer;
+  font-size:10px;
+  white-space:nowrap
+}
+.table-contact:hover { border-color:#8caabb;background:#eaf2f5 }
+.usage-bottom-bar { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:14px;padding:13px 0 6px;border-top:1px solid var(--line-soft) }
+.usage-pagination { display:flex;align-items:center;gap:12px;color:#77776e;font-size:11px }
+.usage-pagination>div { display:flex;gap:5px }
+.usage-bottom-bar .primary-button { width:auto;min-width:210px }
+.booking-hint { margin:5px 0 0;color:#8b8579;font-size:11px;line-height:1.7 }
+.my-reservations { margin-top:20px;padding:17px 18px;border:1px solid #d8e1e2;border-radius:9px;background:#f5f8f6 }
+.my-reservations-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:15px }
+.my-reservations-heading h3 { margin:0 0 4px;color:#4c605d;font-family:"Songti SC","Noto Serif SC",serif;font-size:16px }
+.my-reservations-heading p { margin:0;color:#848b84;font-size:10px;line-height:1.7 }
+.local-badge { padding:5px 8px;border:1px solid #d0dcda;border-radius:999px;color:#66837c;font-size:9px;white-space:nowrap }
+.my-reservation-list { display:grid;gap:8px;margin-top:12px }
+.reservation-empty { margin:0;padding:11px 0;color:#999589;font-size:11px }
+.reservation-receipt { display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:10px 12px;border:1px solid #e0e7e4;border-radius:7px;background:#fffdf9 }
+.reservation-receipt>div { display:flex;align-items:center;gap:8px;min-width:0 }
+.reservation-receipt strong { overflow:hidden;color:#555b54;font-size:11px;text-overflow:ellipsis;white-space:nowrap }
+.reservation-receipt small,.reservation-receipt time { color:#938f84;font-size:9px;white-space:nowrap }
+.receipt-state { padding:4px 7px;border-radius:999px;background:#e8f0eb;color:#5d806c;font-size:9px;white-space:nowrap }
+.device-card-actions { display:flex;flex-wrap:wrap;gap:13px }
+.device-card-actions .device-history { margin-top:8px }
+.admin-device-note { margin:8px 0 0;color:#8d857a;font-size:10px;line-height:1.7 }
+.admin-device-row { grid-template-columns:16px minmax(0,1fr) auto;grid-template-rows:auto auto;min-height:57px;gap:5px 9px }
+.admin-device-name { grid-column:2;grid-row:1 }
+.admin-device-code { grid-column:3;grid-row:1 }
+.admin-device-count { grid-column:2;grid-row:2 }
+.admin-device-state { grid-column:3;grid-row:2;justify-self:end;padding:3px 6px;border-radius:99px;background:#eef0e9;color:#73746c;font-size:9px;white-space:nowrap }
+.admin-device-state.unavailable { background:#fae3d7;color:#9e5944 }
+.device-detail-dialog { width:min(690px,calc(100% - 32px));max-height:calc(100vh - 32px);overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);padding:29px;box-shadow:0 20px 80px rgba(39,34,26,.22);position:relative }
+.device-detail-dialog::backdrop { background:rgba(38,39,32,.38);backdrop-filter:blur(3px) }
+.device-detail-dialog h2 { margin:6px 0 7px;font-family:"Songti SC","Noto Serif SC",serif;font-size:27px }
+.device-detail-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px }
+.detail-item { min-width:0;padding:12px 13px;border:1px solid var(--line-soft);border-radius:8px;background:#fffdf9 }
+.detail-item span,.detail-item strong { display:block }
+.detail-item span { margin-bottom:6px;color:#928575;font-size:10px }
+.detail-item strong { overflow-wrap:anywhere;color:#57584f;font-size:12px;font-weight:500;line-height:1.6 }
+.detail-item:last-child { grid-column:1/-1 }
+.detail-status-note { margin-top:12px;padding:11px 13px;border-left:3px solid var(--wood);background:#f7f0e7;color:#827766;font-size:11px;line-height:1.75 }
+.device-detail-dialog .dialog-actions { flex-wrap:wrap }
+.contact-empty { margin:20px 0;padding:22px;border:1px solid #e1d9cc;border-radius:10px;background:#f8f4ec;text-align:center }
+.contact-empty>span { display:block;margin-bottom:8px;color:var(--blue);font-size:26px }
+.contact-empty strong { color:#5a5b54;font-size:13px }
+.contact-empty p { max-width:500px;margin:9px auto 0;color:#858075;font-size:11px;line-height:1.8 }
+.contact-dialog .dialog-actions .primary-button { width:auto;min-width:110px }
+.primary-button:hover:not(:disabled) { background:#557c96;filter:none }
+.primary-button:disabled { background:#9aaeb8;color:#f8fafb }
+
+@media(max-width:1000px) {
+  .login-shell { padding:22px 24px 18px }
+  .usage-bottom-bar .primary-button { min-width:190px }
+}
+@media(max-width:760px) {
+  .login-shell { padding:18px 18px 14px }
+  .login-card-wrap { padding:20px 0 }
+  .login-panel { padding:29px 25px 24px }
+  .login-topbar>span { font-size:10px }
+  .usage-bottom-bar { align-items:stretch;flex-direction:column;gap:12px }
+  .usage-bottom-bar .primary-button { width:100%;min-height:44px }
+  .usage-pagination { justify-content:space-between }
+  .reservation-receipt { grid-template-columns:minmax(0,1fr) auto;gap:7px 10px }
+  .reservation-receipt time { grid-column:1/-1 }
+  .device-detail-dialog { padding:24px 18px }
+  .device-detail-dialog .dialog-actions button { flex:1 }
+}
+@media(max-width:480px) {
+  .login-shell { padding:14px 14px 12px }
+  .login-topbar { padding-bottom:12px }
+  .login-topbar>span { display:none }
+  .login-panel { padding:24px 19px 21px }
+  .login-panel-heading h1 { font-size:32px }
+  .login-footer { justify-content:center;gap:8px;font-size:10px }
+  .login-footer i { width:14px }
+  .my-reservations { padding:14px 12px }
+  .my-reservations-heading h3 { font-size:14px }
+  .device-detail-grid { grid-template-columns:1fr }
+  .detail-item:last-child { grid-column:auto }
+  .device-detail-dialog .dialog-actions { flex-direction:column-reverse }
+  .device-detail-dialog .dialog-actions button { width:100% }
 }

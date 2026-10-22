@@ -14,25 +14,27 @@
 </head>
 <body>
   <section class="login-screen" id="loginScreen">
-    <section class="login-story" aria-label="服务介绍">
+    <section class="login-shell" aria-label="登录课程演示工作台">
+      <header class="login-topbar">
       <a class="brand login-brand" href="#home" aria-label="物尽其用">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 35V15c8 0 13 4 16 12 3-8 8-12 16-12v20c-8 0-13 2-16 6-3-4-8-6-16-6Z"/><path d="M24 27v14"/></svg></span><span class="brand-name">物尽其用</span>
       </a>
-      <p class="eyebrow"><span class="eyebrow-rule"></span>校园共享设备 · 课程演示</p>
-      <h1>让每一次借用，<br>都有迹可循。</h1>
-      <p>从查找设备、查看日期到提交预约，把分散的设备信息和使用记录放进一个清楚的工作台。</p>
-      <div class="login-story-note"><span>01</span><span>设备一览</span><i></i><span>02</span><span>预约登记</span><i></i><span>03</span><span>使用统计</span></div>
-    </section>
-    <section class="login-panel" aria-labelledby="loginTitle">
-      <div class="login-panel-heading"><span class="section-index">DEMO ACCESS</span><h2 id="loginTitle">进入设备工作台</h2><p>请选择课程演示账号登录。</p></div>
-      <form id="loginForm" class="login-form">
-        <label for="loginAccount">账号</label><input id="loginAccount" name="account" autocomplete="username" required placeholder="输入演示账号" />
-        <label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="输入演示密码" />
-        <p class="login-error" id="loginError" role="alert"></p>
-        <button class="primary-button login-submit" type="submit">登录演示工作台 <span>→</span></button>
-      </form>
-      <div class="demo-credentials"><strong>演示账号</strong><span>使用者：student / demo123</span><span>管理员：admin / demo123</span></div>
-      <p class="demo-limit">此处为前端课程演示账号，不连接真实身份认证服务；管理员身份不能用于真实权限控制。</p>
+      <span>校园共享设备 · 预约与登记</span>
+      </header>
+      <div class="login-card-wrap">
+        <section class="login-panel" aria-labelledby="loginTitle">
+          <div class="login-panel-heading"><span class="section-index">校园共享设备 · 课程演示</span><h1 id="loginTitle">让每一次借用，<br>都有迹可循。</h1><p>登录后查找设备、查看日期并提交预约。</p></div>
+          <form id="loginForm" class="login-form">
+            <label for="loginAccount">账号</label><input id="loginAccount" name="account" autocomplete="username" required placeholder="输入演示账号" />
+            <label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="输入演示密码" />
+            <p class="login-error" id="loginError" role="alert"></p>
+            <button class="primary-button login-submit" type="submit">进入工作台 <span>→</span></button>
+          </form>
+          <div class="demo-credentials"><strong>课程演示账号</strong><span>使用者：student / demo123</span><span>管理员：admin / demo123</span></div>
+          <p class="demo-limit">演示账号由前端校验，不连接真实身份认证；管理员身份不能用于真实权限控制。</p>
+        </section>
+      </div>
+      <footer class="login-footer"><span>设备一览</span><i></i><span>预约登记</span><i></i><span>使用记录</span></footer>
     </section>
   </section>
   <div class="page-shell">
@@ -117,7 +119,7 @@
                 <div class="calendar-nav"><button class="icon-button" id="prevMonth" aria-label="上个月">‹</button><button class="icon-button" id="nextMonth" aria-label="下个月">›</button></div>
               </div>
             </div>
-            <div class="calendar-legend"><span><i class="legend-dot dot-mine"></i>我的预约</span><span><i class="legend-dot dot-busy"></i>已被预约</span><span><i class="legend-dot dot-free"></i>可预约</span></div>
+            <div class="calendar-legend"><span><i class="legend-dot dot-mine"></i>本机提交记录</span><span><i class="legend-dot dot-busy"></i>已有登记</span><span><i class="legend-dot dot-free"></i>无登记记录</span></div>
             <div class="calendar-grid" id="calendarGrid" aria-label="日历">
               <div class="calendar-weekdays"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
               <div class="calendar-days" id="calendarDays"><div class="empty-calendar">连接服务端后显示可预约日期</div></div>
@@ -127,13 +129,15 @@
           <section class="usage-panel panel" id="usagePanel" aria-labelledby="usageTitle">
             <div class="usage-heading">
               <div><span class="section-index">03 / DAILY LOG</span><h2 id="usageTitle">当日使用登记</h2></div>
-              <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已使用</button><button data-usage="idle">空闲</button></div></div>
+              <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已有登记</button><button data-usage="idle">暂无登记</button></div></div>
             </div>
+            <p class="usage-data-note" id="usageDataNote">时段、预计时长、登记人和设备状态以服务端实际提供的数据为准。</p>
             <div class="usage-table-wrap">
-              <table class="usage-table"><thead><tr><th>使用日期</th><th>设备</th><th>状态</th></tr></thead><tbody id="usageRows"><tr><td colspan="3" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
+              <table class="usage-table"><thead><tr><th>日期与设备</th><th>登记时段</th><th>预计时长</th><th>登记人</th><th>设备/预约状态</th><th>沟通</th></tr></thead><tbody id="usageRows"><tr><td colspan="6" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
             </div>
-            <div class="usage-pagination"><span id="usagePageLabel">—</span><div><button class="icon-button" id="usagePrev" aria-label="上一页" disabled>‹</button><button class="icon-button" id="usageNext" aria-label="下一页" disabled>›</button></div></div>
-            <div class="usage-footer"><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button><p class="footer-hint" id="bookingHint">选择设备和日期后，可以提交预约</p><span class="review-note">预约冲突由服务端检查</span></div>
+            <div class="usage-bottom-bar"><div class="usage-pagination"><span id="usagePageLabel">—</span><div><button class="icon-button" id="usagePrev" aria-label="上一页" disabled>‹</button><button class="icon-button" id="usageNext" aria-label="下一页" disabled>›</button></div></div><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button></div>
+            <p class="booking-hint" id="bookingHint">选择设备和日期后，可以提交预约；预约时段与可用状态以服务端信息为准。</p>
+            <section class="my-reservations" aria-labelledby="myReservationsTitle"><div class="my-reservations-heading"><div><h3 id="myReservationsTitle">本机预约提交记录</h3><p>仅保存在当前浏览器，用于查看本次演示操作，不代表账号级预约清单。</p></div><span class="local-badge">本机保存</span></div><div id="myReservationList" class="my-reservation-list"><p class="reservation-empty">提交预约后会显示在这里。</p></div></section>
           </section>
 
         </section>
@@ -145,6 +149,7 @@
             <h2>设备索引</h2>
             <label class="select-current"><input type="checkbox" id="selectCurrentPage"><span>全选本页</span></label>
           </div>
+          <p class="admin-device-note">查看服务端返回的设备状态；故障标记和检修公告需由服务端提供。</p>
           <div class="admin-device-list" id="statsDeviceList"><p class="table-empty">正在读取设备目录…</p></div>
           <div class="admin-device-pagination">
             <span id="statsPageLabel">第 1 页</span>
@@ -183,23 +188,23 @@
       </section>
 
       <section class="info-section guide-section" id="guide" aria-labelledby="guideTitle">
-        <div class="info-heading"><div><span class="section-index">HOW IT WORKS</span><h2 id="guideTitle">使用说明</h2><p>从启动课程服务端到完成一次预约，按下面的顺序操作。</p></div><span class="info-index">01—04</span></div>
+        <div class="info-heading"><div><span class="section-index">USER GUIDE</span><h2 id="guideTitle">使用说明</h2><p>按“找设备—看日期—提交预约—确认结果”的顺序完成借用。</p></div><span class="info-index">01—05</span></div>
         <div class="guide-steps">
-          <article class="guide-step"><span>01</span><div><h3>启动模拟服务端</h3><p>先解压课程提供的服务端，在 Windows 上运行 <code>模拟服务端.exe</code>。保持程序窗口开启，确认 <code>Device.txt</code> 和 <code>Record.txt</code> 留在服务端要求的目录。</p></div></article>
-          <article class="guide-step"><span>02</span><div><h3>确认设备目录</h3><p>页面显示“服务端在线”后，在设备一览中搜索名称或编号。点击设备可查看日历和使用记录。</p></div></article>
-          <article class="guide-step"><span>03</span><div><h3>选日期并提交预约</h3><p>通过日历箭头或年月选择器定位日期，再点击“预约所选设备”。一次最多提交五个日期；冲突日期以服务端返回结果为准。</p></div></article>
-          <article class="guide-step"><span>04</span><div><h3>查看记录与统计</h3><p>管理员演示账号可查看设备累计次数和选定日期范围内的登记记录。日期范围统计按记录的 UseDate 计算，不代表服务端确认的实际完成使用。</p></div></article>
+          <article class="guide-step"><span>01</span><div><h3>登录并查找设备</h3><p>使用课程提供的演示身份进入工作台，在“设备一览”按名称或编号搜索。点击“设备详情”查看服务端提供的编号、类别、说明和状态。</p></div></article>
+          <article class="guide-step"><span>02</span><div><h3>查看日期登记</h3><p>选中设备后，在日历选择日期。日历标记表示服务端记录；“暂无登记”仅代表当前接口没有返回该日记录，不保证设备无故障或全天可借。</p></div></article>
+          <article class="guide-step"><span>03</span><div><h3>核对时段与设备状态</h3><p>查看登记时段、预计时长和设备状态。课程接口未提供的字段会明确标为“未提供”，提交预约前应向管理员确认可借时间及设备状况。</p></div></article>
+          <article class="guide-step"><span>04</span><div><h3>提交预约并看反馈</h3><p>选择一件设备和最多五个日期，提交后根据服务端响应判断成功或冲突。成功提交的日期和设备会保存在本机“预约提交记录”中。</p></div></article>
+          <article class="guide-step"><span>05</span><div><h3>需要协调时联系管理员</h3><p>当前系统没有借用者身份和站内消息接口，因此暂不能直接联系登记人或协商先后顺序。请通过课程指定渠道沟通。</p></div></article>
         </div>
-        <div class="guide-terminal"><div><span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span><span>Windows 终端 · 静态页面</span></div><code>cd E:\Programs\campus-equipment-booking<br>py -m http.server 5500</code><p>浏览器访问 <code>http://127.0.0.1:5500</code>。若页面仍离线，检查服务端是否运行及浏览器跨域提示。</p></div>
-        <details class="guide-faq"><summary>常见问题：接口地址能打开，页面却显示离线？</summary><p>通常是网页来源与服务端端口不同导致跨域请求被浏览器拦截。先打开浏览器开发者工具的 Console 查看报错，再按课程环境要求配置服务端跨域，或使用老师指定的页面运行方式。</p></details>
+        <details class="guide-faq"><summary>网页打不开或显示离线时怎么处理？</summary><p>先按项目 README 启动课程模拟服务端，再用本地 HTTP 服务器打开网页。若服务端地址能打开但页面仍离线，检查浏览器 Console 中的跨域错误，并按课程环境要求设置服务端来源权限。</p></details>
       </section>
 
       <section class="info-section notices-section" id="notices" aria-labelledby="noticesTitle">
-        <div class="info-heading"><div><span class="section-index">NOTICE BOARD</span><h2 id="noticesTitle">公告与须知</h2><p>预约和数据展示以课程模拟服务端的实际响应为准。</p></div><span class="info-index">02—04</span></div>
+        <div class="info-heading"><div><span class="section-index">SITE UPDATES</span><h2 id="noticesTitle">项目公告</h2><p>记录本项目功能调整、设备状态信息和使用提醒。</p></div><span class="info-index">UPDATES</span></div>
         <div class="notice-grid">
-          <article class="notice-card notice-feature"><span class="notice-tag">服务状态</span><h3>先启动服务端，再打开工作台</h3><p>服务端窗口关闭、端口不可访问或跨域请求被拦截时，页面无法读取最新设备和记录。离线缓存仅供查看，不能提交预约。</p><span class="notice-foot">默认服务地址 · 127.0.0.1:12345</span></article>
-          <article class="notice-card"><span class="notice-tag">预约说明</span><h3>预约冲突由服务端校验</h3><p>提交前可以查看日历记录；最终是否成功仍以服务端返回为准。当前接口不支持撤销、审批或填写用途。</p></article>
-          <article class="notice-card"><span class="notice-tag">演示账号</span><h3>账号仅用于课程页面演示</h3><p>演示账号由前端校验，不是学校账号系统。管理员入口不具备真实访问控制，不要用于真实设备或敏感数据。</p></article>
+          <article class="notice-card notice-feature"><span class="notice-tag">功能更新 · 2026.10</span><h3>预约提交后可在本机查看记录</h3><p>工作台新增预约结果提示和本机提交记录，便于确认刚才选择的设备、日期及提交时间。此记录不等同于服务端提供的个人预约清单。</p></article>
+          <article class="notice-card"><span class="notice-tag">设备状态</span><h3>故障与翻新信息以服务端为准</h3><p>当前课程接口未提供完整的报修、检修、翻新公告。设备详情会显示接口已返回的状态；未提供时会明确提示，预约前请向管理员确认。</p></article>
+          <article class="notice-card"><span class="notice-tag">预约协调</span><h3>暂不支持联系登记人</h3><p>当前接口没有借用者身份、联系方式或站内聊天能力。若需协商使用顺序，请通过课程指定渠道联系管理员。</p></article>
         </div>
       </section>
 
@@ -219,6 +224,25 @@
       <p class="form-message" id="bookingMessage" role="status"></p>
       <div class="dialog-actions"><button type="button" class="secondary-button" id="cancelBooking">取消</button><button type="submit" class="primary-button" id="submitBooking">提交预约</button></div>
     </form>
+  </dialog>
+  <dialog class="device-detail-dialog" id="deviceDetailDialog" aria-labelledby="deviceDetailTitle">
+    <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭设备详情">×</button></form>
+    <span class="section-index">DEVICE / DETAIL</span><h2 id="deviceDetailTitle">设备详情</h2>
+    <p class="dialog-intro" id="deviceDetailIntro">设备信息来自课程模拟服务端。</p>
+    <div class="device-detail-grid" id="deviceDetailGrid"></div>
+    <div class="detail-status-note" id="deviceDetailNote"></div>
+    <div class="dialog-actions"><button type="button" class="secondary-button" id="detailContactButton">联系登记人</button><button type="button" class="secondary-button" id="detailHistoryButton">查看登记历史</button><button type="button" class="primary-button" id="detailReserveButton">预约这件设备</button></div>
+  </dialog>
+  <dialog class="device-detail-dialog contact-dialog" id="contactDialog" aria-labelledby="contactTitle">
+    <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭沟通说明">×</button></form>
+    <span class="section-index">CONTACT / COORDINATION</span><h2 id="contactTitle">沟通与使用协调</h2>
+    <p class="dialog-intro">当前课程服务端没有返回借用者身份，也没有站内消息接口，因此此处无法发送消息或代为协商。</p>
+    <div class="chat-panel" aria-label="预约沟通窗口预览">
+      <div class="chat-thread"><div class="chat-system-message"><span aria-hidden="true">i</span><p id="contactStatusText">当前服务端未提供登记人身份和站内消息接口，消息发送暂不可用。请通过课程指定渠道联系管理员。</p></div></div>
+      <div class="chat-composer"><textarea disabled rows="2" placeholder="消息发送暂未开放"></textarea><button type="button" class="primary-button" disabled>发送</button></div>
+      <p class="chat-privacy-note">接入真实聊天前，需要后端提供会话、消息读写和隐私授权机制。</p>
+    </div>
+    <div class="dialog-actions"><button type="button" class="primary-button" id="closeContactDialog">知道了</button></div>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>

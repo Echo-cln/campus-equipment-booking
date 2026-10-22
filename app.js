@@ -10,9 +10,9 @@
     role: "user", adminView: true,
     page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
-    currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false,
+    currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false, calendarDeviceId: "",
     usageStatus: "used", usagePage: 1, usageTotal: 0, bookingMode: false, bookingDates: [], statsSelection: [],
-    statsPeriod: "all", statsRange: null, statsRows: [], statsRequestId: 0, currentHistoryDevice: null, stale: false, searchTimer: null
+    statsPeriod: "all", statsRange: null, statsRows: [], statsRequestId: 0, currentHistoryDevice: null, myReservations: [], detailDevice: null, stale: false, searchTimer: null
   };
 
   const escapeHtml = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
@@ -44,6 +44,39 @@
     return (d.getMonth() + 1) + "月" + d.getDate() + "日 · 使用登记";
   };
   const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+  function deviceCondition(device) {
+    const raw = field(device, ["condition", "Condition", "health", "Health", "deviceStatus", "DeviceStatus", "maintenanceStatus", "MaintenanceStatus", "repairStatus", "RepairStatus", "status", "Status"], "");
+    const available = field(device, ["available", "isAvailable", "is_available"], null);
+    const text = String(raw || "").trim();
+    const faultFlag = ["isBroken", "IsBroken", "underMaintenance", "UnderMaintenance", "isDisabled", "IsDisabled"].some((key) => device && (device[key] === true || device[key] === 1));
+    if (faultFlag || available === false || available === 0 || /故障|维修|检修|停用|损坏|不可用|报废/.test(text)) return { label: text || "暂停预约", unavailable: true };
+    if (available === true || available === 1) return { label: text || "服务端标记可用", unavailable: false };
+    return { label: text || "服务端未提供", unavailable: /故障|维修|检修|停用|损坏|不可用|报废/.test(text) };
+  }
+  function displayField(value, fallback = "服务端未提供") {
+    return value === undefined || value === null || String(value).trim() === "" ? fallback : String(value);
+  }
+  function readMyReservations() {
+    try {
+      const value = JSON.parse(localStorage.getItem("wu-jin-qi-yong:my-reservations") || "[]");
+      state.myReservations = Array.isArray(value) ? value : [];
+    } catch { state.myReservations = []; }
+    renderMyReservations();
+  }
+  function saveMyReservation(entry) {
+    state.myReservations = [entry].concat(state.myReservations).slice(0, 30);
+    try { localStorage.setItem("wu-jin-qi-yong:my-reservations", JSON.stringify(state.myReservations)); } catch { /* optional local receipt */ }
+    renderMyReservations();
+  }
+  function renderMyReservations() {
+    const node = $("#myReservationList");
+    if (!node) return;
+    if (!state.myReservations.length) {
+      node.innerHTML = '<p class="reservation-empty">提交预约后会显示在这里。</p>';
+      return;
+    }
+    node.innerHTML = state.myReservations.map((entry) => '<article class="reservation-receipt"><div><span class="receipt-state">已提交请求</span><strong>' + escapeHtml(entry.deviceName || entry.deviceId) + '</strong><small>设备编号 ' + escapeHtml(entry.deviceId) + '</small></div><p>' + (entry.dates || []).map(escapeHtml).join("、") + '</p><time>' + escapeHtml(entry.submittedAt || "") + '</time></article>').join("");
+  }
   function initCalendarPicker() {
     const yearSelect = $("#calendarYear");
     const monthSelect = $("#calendarMonth");
@@ -139,7 +172,7 @@
   const deviceCode = (device) => String(field(device, ["No", "code", "deviceCode", "device_id", "deviceId", "id"], "—"));
   const deviceCategory = (device) => String(field(device, ["category", "type", "kind", "categoryName"], "共享设备"));
   const deviceCount = (device) => num(field(device, ["UseCount", "usageCount", "useCount", "usage_count", "usedCount", "count"], 0));
-  const deviceDescription = (device) => String(field(device, ["description", "purpose", "intro", "remark"], "查看设备详情与可预约日期。"));
+  const deviceDescription = (device) => String(field(device, ["description", "purpose", "intro", "remark"], "服务端未提供设备说明。"));
   const isAvailable = (device) => field(device, ["available", "isAvailable", "is_available"], null);
 
   function deviceIllustration(category, index) {
@@ -171,25 +204,31 @@
     container.innerHTML = visible.map((device, index) => {
       const id = deviceId(device);
       const available = isAvailable(device);
-      const status = available === null ? "状态待确认" : (available ? "当前可预约" : "今日已占用");
-      const statusClass = available === null ? "unknown" : (available ? "" : "busy");
+      const condition = deviceCondition(device);
+      const status = condition.unavailable ? condition.label : (available === null ? (condition.label === "服务端未提供" ? "状态待确认" : condition.label) : (available ? "服务端标记可用" : "当天已有登记"));
+      const statusClass = condition.unavailable ? "busy" : (available === null ? "unknown" : (available ? "" : "busy"));
       const palette = ["#e6ede4", "#f6e5d8", "#f4e8bc", "#dce9e8", "#e8e3d5"];
       return '<article class="device-card ' + (id === state.selectedDeviceId ? "selected" : "") + '" data-device="' + escapeHtml(id) + '" tabindex="0" role="button" aria-pressed="' + (id === state.selectedDeviceId) + '">' +
         '<div class="device-visual" style="--visual-bg:' + palette[((state.page - 1) * pageSize + index) % palette.length] + '"><span class="device-number">' + String((state.page - 1) * pageSize + index + 1).padStart(2, "0") + "</span>" + deviceIllustration(deviceCategory(device), index) + "</div>" +
         '<div class="device-info"><span class="device-kind">' + escapeHtml(deviceCategory(device)) + '</span><div class="device-title-row"><h3 class="device-title">' + escapeHtml(deviceName(device)) + '</h3><span class="device-code">' + escapeHtml(deviceCode(device)) + '</span></div>' +
-        '<p class="device-description">' + escapeHtml(deviceDescription(device)) + '</p><div class="device-meta"><span class="usage-count">' + deviceCount(device) + " 次使用</span><span class=\"availability " + statusClass + '">' + status + '</span></div><button type="button" class="device-history" data-history="' + escapeHtml(id) + '">查看预约历史</button></div></article>';
+        '<p class="device-description">' + escapeHtml(deviceDescription(device)) + '</p><div class="device-meta"><span class="usage-count">' + deviceCount(device) + " 次使用</span><span class=\"availability " + statusClass + '">' + status + '</span></div><div class="device-card-actions"><button type="button" class="device-history" data-detail="' + escapeHtml(id) + '">设备详情</button><button type="button" class="device-history" data-history="' + escapeHtml(id) + '">查看登记历史</button></div></div></article>';
     }).join("");
     $$(".device-card").forEach((card) => {
       const select = () => selectDevice(card.dataset.device);
       card.addEventListener("click", (event) => {
-        if (!event.target.closest("[data-history]")) select();
+        if (!event.target.closest("[data-history], [data-detail]")) select();
       });
-      card.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(); } });
+      card.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) { event.preventDefault(); select(); } });
     });
     $$("[data-history]").forEach((button) => button.addEventListener("click", (event) => {
       event.stopPropagation();
       const device = state.allDevices.find((item) => deviceId(item) === button.dataset.history);
       if (device) loadHistory(device);
+    }));
+    $$('[data-detail]').forEach((button) => button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const device = state.allDevices.find((item) => deviceId(item) === button.dataset.detail);
+      if (device) openDeviceDetail(device);
     }));
     $("#pageLabel").textContent = "第 " + state.page + " 页";
     $("#prevPage").disabled = state.page <= 1;
@@ -258,18 +297,29 @@
   }
 
   async function loadCalendar() {
-    if (!state.selectedDeviceId) { state.calendarEvents = []; state.calendarReady = true; renderCalendar(); return; }
+    if (!state.selectedDeviceId) { state.calendarEvents = []; state.calendarReady = true; state.calendarDeviceId = ""; renderCalendar(); return; }
+    const requestedDeviceId = state.selectedDeviceId;
+    const requestedYear = state.currentYear;
+    const requestedMonth = state.currentMonth;
+    state.calendarReady = false;
+    state.calendarDeviceId = requestedDeviceId;
+    state.calendarEvents = [];
+    renderCalendar();
     try {
       const result = await window.Service.getCalendar({
-        year: state.currentYear, month: state.currentMonth, deviceId: state.selectedDeviceId
+        year: requestedYear, month: requestedMonth, deviceId: requestedDeviceId
       });
+      if (requestedDeviceId !== state.selectedDeviceId || requestedYear !== state.currentYear || requestedMonth !== state.currentMonth) return;
       state.calendarEvents = normalizeEvents(result.data);
       state.calendarReady = true;
+      state.calendarDeviceId = requestedDeviceId;
       updateConnection(result);
       renderCalendar();
     } catch (error) {
+      if (requestedDeviceId !== state.selectedDeviceId || requestedYear !== state.currentYear || requestedMonth !== state.currentMonth) return;
       state.calendarEvents = [];
       state.calendarReady = false;
+      state.calendarDeviceId = requestedDeviceId;
       renderCalendar(error.message);
       showError(error.message);
     }
@@ -284,6 +334,12 @@
     const firstOffset = (first.getDay() + 6) % 7;
     let start = new Date(state.currentYear, state.currentMonth - 1, 1 - firstOffset);
     const events = new Map(state.calendarEvents.map((event) => [event.date, event]));
+    state.myReservations.filter((entry) => String(entry.deviceId) === String(state.selectedDeviceId)).forEach((entry) => {
+      (entry.dates || []).forEach((date) => {
+        const existing = events.get(date) || {};
+        events.set(date, { ...existing, date, booked: true, mine: true, localReceipt: true });
+      });
+    });
     const shown = [];
     let dayCount = 42;
     if ((state.currentView === "week" || state.currentView === "day") && state.selectedDate) {
@@ -313,7 +369,7 @@
       if (event && event.mine) classes.push("is-mine");
       if (event && !event.booked) classes.push("is-idle");
       const disabled = !inMonth && state.currentView === "month";
-      shown.push('<button class="' + classes.join(" ") + '" data-date="' + key + '" ' + (disabled ? "disabled" : "") + ' aria-label="' + key + '">' +
+      shown.push('<button class="' + classes.join(" ") + '" data-date="' + key + '" ' + (disabled ? "disabled" : "") + ' aria-label="' + key + (event && event.localReceipt ? "，本机有预约提交记录" : event && event.booked ? "，已有登记记录" : "，暂无登记记录") + '">' +
         '<span class="day-number">' + date.getDate() + "</span></button>");
     }
     if (error) grid.innerHTML = '<div class="empty-calendar" style="grid-column:1/-1;padding:36px 12px;text-align:center;color:#9b654e">' + escapeHtml(error) + "</div>";
@@ -335,11 +391,15 @@
   }
 
   function recordFields(record) {
+    const explicitTime = field(record, ["timeRange", "TimeRange", "useTime", "UseTime", "period", "Period", "slot"], "");
+    const startTime = field(record, ["startTime", "StartTime", "beginTime", "BeginTime"], "");
+    const endTime = field(record, ["endTime", "EndTime", "finishTime", "FinishTime"], "");
     return {
-      time: String(field(record, ["date", "UseDate", "timeRange", "time", "period", "slot"], "时段未提供")),
+      time: String(explicitTime || (startTime && endTime ? startTime + "—" + endTime : startTime || field(record, ["time"], ""))),
+      duration: String(field(record, ["duration", "Duration", "useDuration", "UseDuration", "expectedDuration", "ExpectedDuration"], "")),
       device: String(field(record, ["deviceName", "Name", "name", "device_name"], "设备")),
       id: String(field(record, ["deviceCode", "No", "deviceId", "device_id", "code"], "—")),
-      user: String(field(record, ["userName", "user", "borrower", "operator"], "—")),
+      user: String(field(record, ["userName", "UserName", "user", "borrower", "Borrower", "operator", "Operator"], "")),
       purpose: String(field(record, ["purpose", "usage", "description", "remark"], "—")),
       status: String(field(record, ["statusText", "status", "state"], "")),
       registration: String(field(record, ["registration", "RegTime", "registeredAt", "registrationTime", "createdAt", "registerTime"], ""))
@@ -347,21 +407,17 @@
   }
   function renderUsage(records, mode, total) {
     const tbody = $("#usageRows");
-    const thead = $(".usage-table thead");
-    if (mode === "history") {
-      thead.innerHTML = "<tr><th>使用日期</th><th>设备编号</th><th>状态</th></tr>";
-      $("#usageTitle").textContent = "设备预约历史";
-    } else {
-      thead.innerHTML = "<tr><th>使用日期</th><th>设备编号</th><th>状态</th></tr>";
-      $("#usageTitle").textContent = "当日使用登记";
-    }
+    $("#usageTitle").textContent = mode === "history" ? "设备登记历史" : "当日使用登记";
+    $("#usageDataNote").textContent = mode === "idle"
+      ? "暂无登记只表示接口未返回该日记录；设备故障状态和可借时段仍需服务端或管理员确认。"
+      : "课程接口目前只提供日期登记；未返回的时段、预计时长、登记人或设备状态会明确标出。";
     state.usageTotal = Number.isFinite(Number(total)) ? Number(total) : records.length;
     const maxPages = Math.max(1, Math.ceil(state.usageTotal / pageSize));
     $("#usagePageLabel").textContent = "第 " + state.usagePage + " / " + maxPages + " 页";
     $("#usagePrev").disabled = state.usagePage <= 1;
     $("#usageNext").disabled = state.usagePage >= maxPages;
     if (!records.length) {
-      tbody.innerHTML = '<tr><td colspan="3" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "该日期暂无空闲设备记录" : "该日期暂无使用登记")) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "未找到当天暂无登记的设备" : "该日期暂无使用登记")) + "</td></tr>";
       return;
     }
     let entries = records.slice();
@@ -369,16 +425,21 @@
     let previousRegistration = "";
     tbody.innerHTML = entries.map((record) => {
       const row = recordFields(record);
-      const status = row.status || (mode === "idle" ? "空闲" : "已登记");
-      const statusClass = /中|进行/i.test(status) ? "in-use" : (mode === "idle" ? "idle" : "");
-      const first = mode === "history" ? String(field(record, ["useDate", "UseDate", "date", "usageDate", "startDate"], "—")).slice(0, 10) : row.time;
+      const useDate = String(field(record, ["date", "useDate", "UseDate", "usageDate", "startDate"], state.selectedDate || "—")).slice(0, 10);
+      const condition = deviceCondition(record);
+      const status = mode === "idle"
+        ? (condition.unavailable ? condition.label : (condition.label === "服务端未提供" ? "设备状态未提供" : condition.label))
+        : (row.status || "已有登记 · 时间未知");
+      const statusClass = condition.unavailable ? "unavailable" : (mode === "idle" ? "idle" : "");
       let group = "";
       if (mode === "history" && row.registration && row.registration !== previousRegistration) {
         previousRegistration = row.registration;
-        group = '<tr class="history-group"><td colspan="3">登记时间 · ' + escapeHtml(row.registration) + "</td></tr>";
+        group = '<tr class="history-group"><td colspan="6">登记时间 · ' + escapeHtml(row.registration) + "</td></tr>";
       }
-      return group + "<tr><td>" + escapeHtml(first) + "</td><td>" + escapeHtml(row.device) + ' <span class="device-code">' + escapeHtml(row.id) + "</span></td><td><span class=\"table-status " + statusClass + "\">" + escapeHtml(status) + "</span></td></tr>";
+      const first = '<strong>' + escapeHtml(useDate) + '</strong><span class="usage-device-name">' + escapeHtml(row.device) + ' · ' + escapeHtml(row.id) + '</span>';
+      return group + '<tr><td class="usage-device-cell">' + first + '</td><td>' + escapeHtml(displayField(row.time, "接口未提供")) + '</td><td>' + escapeHtml(displayField(row.duration, "接口未提供")) + '</td><td>' + escapeHtml(displayField(row.user, "接口未返回")) + '</td><td><span class="table-status ' + statusClass + '">' + escapeHtml(status) + '</span></td><td><button type="button" class="table-contact" data-contact="' + escapeHtml(row.user) + '">沟通说明</button></td></tr>';
     }).join("");
+    $$('[data-contact]').forEach((button) => button.addEventListener("click", () => openContactDialog(button.dataset.contact)));
   }
   async function loadDailyUsage() {
     if (!state.selectedDate) { renderUsage([], "used"); return; }
@@ -416,6 +477,42 @@
     }
   }
 
+  function openDeviceDetail(device) {
+    state.detailDevice = device;
+    const id = deviceId(device);
+    const condition = deviceCondition(device);
+    const currentDay = state.calendarDeviceId === id ? state.calendarEvents.find((event) => event.date === state.selectedDate) : null;
+    const localSubmitted = state.myReservations.some((entry) => String(entry.deviceId) === id && (entry.dates || []).includes(state.selectedDate));
+    const details = [
+      ["设备名称", deviceName(device)], ["设备编号", id], ["设备类别", deviceCategory(device)],
+      ["累计使用次数", deviceCount(device) + " 次"],
+      ["设备状态", condition.label],
+      ["所在位置", field(device, ["location", "Location", "site", "Site", "room", "Room"], "")],
+      ["品牌 / 型号", field(device, ["model", "Model", "brand", "Brand", "specification", "Specification"], "")],
+      ["可借时段", field(device, ["availableTime", "AvailableTime", "timeRange", "TimeRange", "openingHours", "OpeningHours"], "")],
+      ["单次可借时长", field(device, ["duration", "Duration", "maxDuration", "MaxDuration", "loanPeriod", "LoanPeriod"], "")],
+      ["当前日期登记", localSubmitted ? "本机已提交预约" : (!state.calendarReady ? "日历记录尚未读取" : (currentDay && currentDay.booked ? "服务端已有登记" : "服务端未返回登记"))],
+      ["设备说明", deviceDescription(device)]
+    ];
+    $("#deviceDetailTitle").textContent = deviceName(device);
+    $("#deviceDetailIntro").textContent = "设备编号 " + id + " · 详细字段来自服务端设备目录。";
+    $("#deviceDetailGrid").innerHTML = details.map(([label, value]) => '<div class="detail-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(displayField(value)) + '</strong></div>').join("");
+    $("#deviceDetailNote").textContent = condition.unavailable
+      ? "服务端标记此设备为故障或停用状态，预约按钮已禁用。"
+      : "预约接口只接收日期；如果没有返回时段、时长或设备状态，请先向管理员确认。";
+    $("#detailReserveButton").disabled = condition.unavailable || !window.Service.online || state.stale;
+    $("#deviceDetailDialog").showModal();
+  }
+  function openContactDialog(borrower = "") {
+    const name = String(borrower || "").trim();
+    $("#contactTitle").textContent = name ? "与登记人沟通 · " + name : "沟通与使用协调";
+    $("#contactStatusText").textContent = name
+      ? "接口返回了登记人名称，但没有站内消息的发送和接收接口，因此暂时不能在此处沟通。请通过课程指定渠道联系管理员。"
+      : "当前服务端未提供登记人身份和站内消息接口，消息发送暂不可用。请通过课程指定渠道联系管理员。";
+    if ($("#deviceDetailDialog").open) $("#deviceDetailDialog").close();
+    $("#contactDialog").showModal();
+  }
+
   function populateBookingDevices() {
     const select = $("#bookingDevice");
     if (!select) return;
@@ -433,6 +530,9 @@
   function openBooking() {
     if (!window.Service.online || state.stale) { notify("离线只读状态下不能提交预约"); return; }
     if (!state.selectedDeviceId || !state.selectedDate) { notify("请先选择设备和日期"); return; }
+    if (state.calendarDeviceId === state.selectedDeviceId && state.calendarEvents.some((item) => item.date === state.selectedDate && item.booked)) { notify("所选日期已有登记，请换一个日期"); return; }
+    const selected = state.allDevices.find((device) => deviceId(device) === state.selectedDeviceId);
+    if (selected && deviceCondition(selected).unavailable) { notify("该设备在服务端标记为故障或停用，暂不能预约"); return; }
     state.bookingDates = [state.selectedDate];
     populateBookingDevices();
     renderBookingDates();
@@ -451,20 +551,34 @@
       $("#bookingMessage").textContent = "当前为离线只读状态，无法提交。";
       return;
     }
+    const requestedDeviceId = $("#bookingDevice").value;
+    const requestedDates = state.bookingDates.slice();
+    const requestedDevice = state.allDevices.find((device) => deviceId(device) === requestedDeviceId);
+    if (requestedDevice && deviceCondition(requestedDevice).unavailable) {
+      $("#bookingMessage").textContent = "该设备已被服务端标记为故障或停用，请选择其他设备。";
+      return;
+    }
     const button = $("#submitBooking");
     button.disabled = true;
     button.textContent = "正在提交…";
     try {
       const result = await window.Service.createReservation({
-        deviceId: $("#bookingDevice").value,
-        dates: state.bookingDates.slice()
+        deviceId: requestedDeviceId,
+        dates: requestedDates
       });
       const payload = unwrap(result.data);
-      $("#bookingMessage").textContent = field(payload, ["message", "msg"], "预约请求已提交。");
+      const message = field(payload, ["message", "msg"], "服务端未返回冲突，预约请求已提交。");
+      $("#bookingMessage").textContent = "提交成功：" + (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + "，" + requestedDates.join("、") + "。" + message;
       $("#bookingMessage").classList.add("success");
-      notify("预约请求已提交");
+      saveMyReservation({ deviceId: requestedDeviceId, deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId, dates: requestedDates, submittedAt: new Date().toLocaleString("zh-CN", { hour12: false }) });
+      state.selectedDeviceId = requestedDeviceId;
+      state.selectedDate = requestedDates[0];
+      $("#selectedDeviceLabel").textContent = (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + " · " + requestedDeviceId;
+      $("#usageDate").textContent = prettyDate(state.selectedDate);
+      notify("预约已提交，结果记录在使用区下方");
       state.bookingMode = false;
       $("#bookingDialog").close();
+      renderDevices();
       await loadCalendar();
       await loadDailyUsage();
     } catch (error) {
@@ -524,7 +638,8 @@
     }
     node.innerHTML = visible.map((device) => {
       const id = deviceId(device);
-      return '<label class="admin-device-row"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span class="admin-device-name">' + escapeHtml(deviceName(device)) + '</span><span class="admin-device-code">' + escapeHtml(id) + '</span><span class="admin-device-count">' + deviceCount(device) + ' 次</span></label>';
+      const condition = deviceCondition(device);
+      return '<label class="admin-device-row"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span class="admin-device-name">' + escapeHtml(deviceName(device)) + '</span><span class="admin-device-code">' + escapeHtml(id) + '</span><span class="admin-device-count">' + deviceCount(device) + ' 次</span><span class="admin-device-state ' + (condition.unavailable ? "unavailable" : "") + '">' + escapeHtml(condition.label) + '</span></label>';
     }).join("");
     $$('.admin-device-row input', node).forEach((input) => input.addEventListener("change", () => {
       if (input.checked && !state.statsSelection.includes(input.value)) state.statsSelection.push(input.value);
@@ -686,6 +801,20 @@
   function bindEvents() {
     $("#loginForm").addEventListener("submit", handleDemoLogin);
     $("#logoutButton").addEventListener("click", logoutDemo);
+    $("#detailContactButton").addEventListener("click", () => openContactDialog());
+    $("#detailHistoryButton").addEventListener("click", () => {
+      const device = state.detailDevice;
+      if (device) { $("#deviceDetailDialog").close(); loadHistory(device); }
+    });
+    $("#detailReserveButton").addEventListener("click", async () => {
+      if (!state.detailDevice) return;
+      state.selectedDeviceId = deviceId(state.detailDevice);
+      $("#selectedDeviceLabel").textContent = deviceName(state.detailDevice) + " · " + deviceCode(state.detailDevice);
+      $("#deviceDetailDialog").close();
+      await loadCalendar();
+      openBooking();
+    });
+    $("#closeContactDialog").addEventListener("click", () => $("#contactDialog").close());
     $$(".nav-link").forEach((link) => link.addEventListener("click", () => {
       $$(".nav-link").forEach((item) => item.classList.toggle("active", item === link));
       if (link.id === "adminNavLink" && state.role === "admin") {
@@ -780,6 +909,7 @@
       const date = $("#bookingDatePicker").value;
       if (!date) { notify("先选择一个日期"); return; }
       if (state.bookingDates.includes(date)) { notify("这个日期已经添加"); return; }
+      if (String($("#bookingDevice").value) === String(state.calendarDeviceId) && state.calendarEvents.some((item) => item.date === date && item.booked)) { notify("该日期已有登记，请换一个日期"); return; }
       if (state.bookingDates.length >= 5) { notify("一次最多选择五个日期"); return; }
       state.bookingDates.push(date);
       state.bookingDates.sort();
@@ -793,6 +923,7 @@
   async function start() {
     bindEvents();
     initCalendarPicker();
+    readMyReservations();
     state.selectedDate = dateKey(today);
     state.currentView = "month";
     $("#usageDate").textContent = prettyDate(state.selectedDate);

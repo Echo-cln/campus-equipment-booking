@@ -102,7 +102,9 @@
     const devices = asList(devicesResult.data);
     const deviceMap = new Map(devices.map((d) => [String(d.No), d]));
     const used = new Set(records.map((r) => String(r.No)));
-    let rows = status === "idle" ? nos.filter((no) => !used.has(no)).map((No) => ({ No, UseDate: date })) : records;
+    let rows = status === "idle"
+      ? nos.filter((no) => !used.has(no)).map((No) => ({ ...(deviceMap.get(String(No)) || {}), No, UseDate: date, isNoRegistration: true }))
+      : records.map((record) => ({ ...(deviceMap.get(String(record.No)) || {}), ...record }));
     rows = rows.map((r) => ({ ...r, deviceName: (deviceMap.get(String(r.No)) || {}).Name || String(r.No), deviceCode: r.No, date: formatDate(r.UseDate), registration: formatDateTime(r.RegTime) }));
     const start = (Math.max(1, Number(page) || 1) - 1) * (Number(pageSize) || 5);
     return { data: { items: rows.slice(start, start + (Number(pageSize) || 5)), total: rows.length }, stale: recordsResult.stale || nosResult.stale || devicesResult.stale };
