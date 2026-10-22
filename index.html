@@ -70,13 +70,7 @@
             <input id="deviceSearch" type="search" placeholder="搜索名称、编号或用途" autocomplete="off" />
             <span class="sr-only">搜索设备</span>
           </label>
-          <div class="category-tabs" id="categoryTabs" role="tablist" aria-label="设备分类">
-            <button class="category-tab is-active" data-category="全部" role="tab" aria-selected="true">全部</button>
-            <button class="category-tab" data-category="制造加工" role="tab" aria-selected="false">制造加工</button>
-            <button class="category-tab" data-category="影像拍摄" role="tab" aria-selected="false">影像拍摄</button>
-            <button class="category-tab" data-category="电子电工" role="tab" aria-selected="false">电子电工</button>
-            <button class="category-tab" data-category="其他" role="tab" aria-selected="false">其他</button>
-          </div>
+          <label class="sr-only" for="deviceSearch">搜索设备</label>
           <div class="device-list" id="deviceList" aria-live="polite">
             <div class="loading-state"><span class="spinner"></span><span>正在读取设备目录…</span></div>
           </div>
@@ -111,15 +105,15 @@
               <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已使用</button><button data-usage="idle">空闲</button></div></div>
             </div>
             <div class="usage-table-wrap">
-              <table class="usage-table"><thead><tr><th>时段</th><th>设备</th><th>使用者</th><th>用途</th><th>状态</th></tr></thead><tbody id="usageRows"><tr><td colspan="5" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
+              <table class="usage-table"><thead><tr><th>使用日期</th><th>设备</th><th>状态</th></tr></thead><tbody id="usageRows"><tr><td colspan="3" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
             </div>
             <div class="usage-pagination"><span id="usagePageLabel">—</span><div><button class="icon-button" id="usagePrev" aria-label="上一页" disabled>‹</button><button class="icon-button" id="usageNext" aria-label="下一页" disabled>›</button></div></div>
-            <div class="usage-footer"><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button><p class="footer-hint" id="bookingHint">选择设备和日期后，可以提交预约</p><span class="review-note">预约提交后由管理员确认</span></div>
+            <div class="usage-footer"><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button><p class="footer-hint" id="bookingHint">选择设备和日期后，可以提交预约</p><span class="review-note">预约冲突由服务端检查</span></div>
           </section>
 
           <section class="admin-panel panel" id="adminPanel" hidden>
-            <div class="admin-heading"><div><span class="section-index">04 / OVERVIEW</span><h2>设备使用统计</h2><p>选择设备，比较所选周期内的使用次数。</p></div><label class="period-select">统计周期<select id="statsPeriod"><option value="month">本月</option><option value="quarter">本季度</option><option value="year">本学年</option></select></label></div>
-            <div class="stats-layout"><div class="stats-device-list" id="statsDeviceList"><p class="table-empty">正在读取设备目录…</p></div><div class="chart-card"><div class="chart-title"><div><span class="section-index">USE COUNT</span><h3>设备使用次数对比</h3></div><span id="statsRange"></span></div><div class="bar-chart" id="statsChart"><p class="table-empty">选择设备后查看统计</p></div></div></div>
+            <div class="admin-heading"><div><span class="section-index">04 / OVERVIEW</span><h2>设备使用统计</h2><p>选择设备，比较服务端提供的累计使用次数。</p></div><label class="period-select">统计口径<select id="statsPeriod"><option value="all">累计使用</option></select></label></div>
+            <div class="stats-layout"><div class="stats-device-list" id="statsDeviceList"><p class="table-empty">正在读取设备目录…</p></div><div class="chart-card"><div class="chart-title"><div><span class="section-index">USE COUNT</span><h3>设备累计使用次数对比</h3></div><span id="statsRange"></span></div><div class="bar-chart" id="statsChart"><p class="table-empty">选择设备后查看统计</p></div></div></div>
           </section>
         </section>
       </section>
@@ -138,7 +132,6 @@
       <label class="field-label" for="bookingDatePicker">预约日期 <span>最多 5 天</span></label>
       <div class="date-picker-row"><input id="bookingDatePicker" type="date" /><button class="secondary-button" type="button" id="addBookingDate">添加日期</button></div>
       <div class="selected-dates" id="selectedDates"></div>
-      <label class="field-label" for="bookingPurpose">用途说明</label><input id="bookingPurpose" maxlength="120" placeholder="请简要填写使用用途" />
       <p class="form-message" id="bookingMessage" role="status"></p>
       <div class="dialog-actions"><button type="button" class="secondary-button" id="cancelBooking">取消</button><button type="submit" class="primary-button" id="submitBooking">提交预约</button></div>
     </form>

@@ -1,102 +1,132 @@
-/* All service calls are kept here so the page never invents records locally.
-   Endpoint and response mappings should follow the course mock-server manual. */
+/* Adapter for the course-provided WCF mock service (127.0.0.1:12345).
+   The application keeps business records on the server; localStorage is read-only cache. */
 (function () {
   const config = window.SITE_CONFIG || {};
-  const baseUrl = String(config.apiBaseUrl || "").replace(/\/+$/, "");
+  const baseUrl = String(config.apiBaseUrl || "http://127.0.0.1:12345").replace(/\/+$/, "");
   const timeoutMs = Number(config.requestTimeoutMs) || 8000;
   const cachePrefix = "wu-jin-qi-yong:cache:";
   let online = false;
   let lastError = "";
-
-  const routes = {
-    health: "/health",
-    devices: "/api/devices",
-    calendar: "/api/calendar",
-    dailyUsage: "/api/usage",
-    history: (id) => "/api/devices/" + encodeURIComponent(id) + "/history",
-    statistics: "/api/admin/statistics",
-    reservation: "/api/reservations"
-  };
-
-  function cacheKey(path) { return cachePrefix + path; }
-  function getCache(path) {
-    try {
-      const value = localStorage.getItem(cacheKey(path));
-      return value ? JSON.parse(value) : null;
-    } catch { return null; }
+  const routes = Object.freeze({
+    devices: "/getDevices", deviceNos: "/getDeviceNo", recordsByNo: "/getRecordByNo",
+    recordsByDate: "/getRecordByDate", reservation: "/regDevice"
+  });
+  function cacheKey(url) { return cachePrefix + url; }
+  function getCache(key) {
+    try { const v = localStorage.getItem(cacheKey(key)); return v ? JSON.parse(v) : null; }
+    catch { return null; }
   }
-  function setCache(path, data) {
-    try { localStorage.setItem(cacheKey(path), JSON.stringify({ data, savedAt: Date.now() })); }
-    catch { /* Storage may be unavailable or full. The online request still succeeds. */ }
+  function setCache(key, data) {
+    try { localStorage.setItem(cacheKey(key), JSON.stringify({ data, savedAt: Date.now() })); }
+    catch { /* Storage is optional; successful server response remains usable. */ }
   }
-  function buildUrl(path, params) {
-    const url = new URL(baseUrl + path, window.location.href);
-    Object.entries(params || {}).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        url.searchParams.set(key, Array.isArray(value) ? value.join(",") : String(value));
-      }
-    });
-    return url.toString();
+  function parseBody(text, contentType) {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    if (/json/i.test(contentType) || /^[\[{"\d-]/.test(trimmed) || /^(true|false|null)$/i.test(trimmed)) {
+      try { return JSON.parse(trimmed); } catch { /* XML is also returned by getDeviceNo. */ }
+    }
+    if (trimmed.startsWith("<")) {
+      const xml = new DOMParser().parseFromString(trimmed, "application/xml");
+      if (xml.querySelector("parsererror")) throw new Error("服务端返回了无法解析的 XML");
+      const strings = Array.from(xml.getElementsByTagNameNS("*", "string")).map((x) => x.textContent || "");
+      return strings.length ? strings : trimmed;
+    }
+    return trimmed;
   }
-  async function request(path, options = {}) {
+  function dateParam(value) {
+    if (!value) return "";
+    const parts = String(value).slice(0, 10).split("-");
+    return parts.length === 3 ? Number(parts[0]) + "-" + Number(parts[1]) + "-" + Number(parts[2]) : String(value);
+  }
+  function dotNetDate(value) {
+    const match = String(value || "").match(/\/Date\((-?\d+)([+-])(\d{2})(\d{2})?\)\//);
+    if (!match) return null;
+    const offset = (Number(match[3]) * 60 + Number(match[4] || 0)) * (match[2] === "+" ? 1 : -1);
+    return new Date(Number(match[1]) + offset * 60000);
+  }
+  function formatDate(value) {
+    const dotNet = dotNetDate(value);
+    const d = dotNet || new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value || "").slice(0, 10);
+    const y = dotNet ? d.getUTCFullYear() : d.getFullYear();
+    const m = dotNet ? d.getUTCMonth() + 1 : d.getMonth() + 1;
+    const day = dotNet ? d.getUTCDate() : d.getDate();
+    return y + "-" + String(m).padStart(2, "0") + "-" + String(day).padStart(2, "0");
+  }
+  async function request(path, params = {}, cache = true) {
+    const url = new URL(baseUrl + path);
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value)); });
+    const key = url.toString();
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-    const method = options.method || "GET";
-    const query = new URLSearchParams(options.params || {}).toString();
-    const key = path + query;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(buildUrl(path, options.params), {
-        method,
-        headers: { Accept: "application/json", ...(options.body ? { "Content-Type": "application/json" } : {}) },
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        signal: controller.signal,
-        cache: "no-store"
-      });
-      const text = await response.text();
-      let data;
-      try { data = text ? JSON.parse(text) : {}; }
-      catch { throw new Error("服务端返回的内容不是有效 JSON"); }
+      const response = await fetch(key, { headers: { Accept: "application/json, application/xml, text/xml" }, signal: controller.signal, cache: "no-store" });
+      const raw = await response.text();
+      const data = parseBody(raw, response.headers.get("content-type") || "");
       if (!response.ok) {
-        const error = new Error(data.message || data.error || "请求失败（" + response.status + "）");
-        error.status = response.status;
-        error.payload = data;
-        throw error;
+        const error = new Error(typeof data === "string" ? data : "请求失败（" + response.status + "）");
+        error.status = response.status; error.payload = data; throw error;
       }
-      online = true;
-      lastError = "";
-      if (method === "GET") setCache(key, data);
+      online = true; lastError = "";
+      if (cache) setCache(key, data);
       return { data, stale: false };
     } catch (error) {
-      if (error.status) {
-        // A conflict or validation response still means the service is reachable.
-        online = true;
-        lastError = error.message;
-        throw error;
-      }
-      if (method === "GET") {
-        const cached = getCache(key);
-        if (cached) {
-          online = false;
-          lastError = error.message;
-          return { data: cached.data, stale: true, savedAt: cached.savedAt };
-        }
-      }
-      online = false;
-      lastError = error.message || "无法连接服务端";
-      throw error;
-    } finally { window.clearTimeout(timer); }
+      if (error.status) { online = true; lastError = error.message; throw error; }
+      const cached = getCache(key);
+      if (cached) { online = false; lastError = error.message; return { data: cached.data, stale: true, savedAt: cached.savedAt }; }
+      online = false; lastError = error.message || "无法连接课程模拟服务端"; throw error;
+    } finally { clearTimeout(timer); }
   }
-
+  const asList = (value) => Array.isArray(value) ? value : value && Array.isArray(value.items) ? value.items : [];
+  const getDevices = async () => request(routes.devices, { page: 1, pageSize: 10000 });
+  const getDeviceNos = async () => {
+    const result = await request(routes.deviceNos);
+    return { ...result, data: asList(result.data).map(String) };
+  };
+  const getCalendar = async ({ year, month, deviceId }) => request(routes.recordsByNo, {
+    no: deviceId, start: year + "-" + month + "-1", end: year + "-" + month + "-" + new Date(Number(year), Number(month), 0).getDate()
+  }).then((r) => ({ ...r, data: asList(r.data).map((x) => ({ ...x, date: formatDate(x.UseDate), booked: true })) }));
+  const getDailyUsage = async ({ date, status, page, pageSize }) => {
+    const [recordsResult, nosResult, devicesResult] = await Promise.all([
+      request(routes.recordsByDate, { date: dateParam(date), page: 1, pageSize: 10000 }), getDeviceNos(), getDevices()
+    ]);
+    const records = asList(recordsResult.data);
+    const nos = nosResult.data;
+    const devices = asList(devicesResult.data);
+    const deviceMap = new Map(devices.map((d) => [String(d.No), d]));
+    const used = new Set(records.map((r) => String(r.No)));
+    let rows = status === "idle" ? nos.filter((no) => !used.has(no)).map((No) => ({ No, UseDate: date })) : records;
+    rows = rows.map((r) => ({ ...r, deviceName: (deviceMap.get(String(r.No)) || {}).Name || String(r.No), deviceCode: r.No, date: formatDate(r.UseDate), registration: formatDateTime(r.RegTime) }));
+    const start = (Math.max(1, Number(page) || 1) - 1) * (Number(pageSize) || 5);
+    return { data: { items: rows.slice(start, start + (Number(pageSize) || 5)), total: rows.length }, stale: recordsResult.stale || nosResult.stale || devicesResult.stale };
+  };
+  const formatDateTime = (value) => {
+    const d = dotNetDate(value);
+    if (!d) return String(value || "");
+    return formatDate(value) + " " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
+  };
+  const getDeviceHistory = async (id, { page = 1, pageSize = 5 } = {}) => request(routes.recordsByNo, { no: id, start: "2000-1-1", end: "2100-12-31" }).then((r) => {
+    const rows = asList(r.data).map((x) => ({ ...x, deviceName: String(x.No), deviceCode: x.No, useDate: formatDate(x.UseDate), registration: formatDateTime(x.RegTime) }));
+    rows.sort((a, b) => String(b.RegTime).localeCompare(String(a.RegTime)));
+    const start = (Math.max(1, Number(page) || 1) - 1) * (Number(pageSize) || 5);
+    return { ...r, data: { items: rows.slice(start, start + (Number(pageSize) || 5)), total: rows.length } };
+  });
+  const getStatistics = async ({ deviceIds }) => getDevices().then((r) => ({
+    ...r, data: asList(r.data).filter((d) => deviceIds.includes(String(d.No))).map((d) => ({ No: d.No, Name: d.Name, UseCount: d.UseCount }))
+  }));
+  async function createReservation({ deviceId, dates }) {
+    const result = await request(routes.reservation, { No: deviceId, UseDates: dates.map(dateParam).join(",") }, false);
+    const conflicts = asList(result.data);
+    if (conflicts.length) {
+      const error = new Error("以下日期发生冲突：" + conflicts.map(formatDate).join("、"));
+      error.status = 409; error.payload = conflicts; throw error;
+    }
+    return result;
+  }
   window.Service = Object.freeze({
-    get online() { return online; },
-    get lastError() { return lastError; },
-    routes,
-    checkHealth: () => request(routes.health),
-    getDevices: (params) => request(routes.devices, { params }),
-    getCalendar: (params) => request(routes.calendar, { params }),
-    getDailyUsage: (params) => request(routes.dailyUsage, { params }),
-    getDeviceHistory: (id, params) => request(routes.history(id), { params }),
-    getStatistics: (params) => request(routes.statistics, { params }),
-    createReservation: (body) => request(routes.reservation, { method: "POST", body })
+    get online() { return online; }, get lastError() { return lastError; }, routes,
+    checkHealth: () => getDevices(), getDevices, getDeviceNos, getCalendar, getDailyUsage,
+    getDeviceHistory, getStatistics, createReservation, formatDate, formatDateTime
   });
 })();

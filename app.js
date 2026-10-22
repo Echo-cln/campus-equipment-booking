@@ -6,7 +6,7 @@
   const today = new Date();
   const state = {
     role: localStorage.getItem("wu-jin-qi-yong:role") || "user",
-    page: 1, category: "全部", search: "", devices: [], totalDevices: 0,
+    page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
     currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false,
     usageStatus: "used", usagePage: 1, usageTotal: 0, bookingMode: false, bookingDates: [], statsSelection: [],
@@ -74,11 +74,11 @@
       ? "离线状态下仅可查看缓存，连接服务端后才能提交预约"
       : (!state.selectedDeviceId || !state.selectedDate ? "选择设备和日期后，可以提交预约" : "已选日期：" + state.selectedDate);
   }
-  const deviceId = (device) => String(field(device, ["id", "deviceId", "device_id", "code", "deviceCode"]));
-  const deviceName = (device) => String(field(device, ["name", "deviceName", "device_name", "title"], "未命名设备"));
-  const deviceCode = (device) => String(field(device, ["code", "deviceCode", "device_id", "deviceId", "id"], "—"));
-  const deviceCategory = (device) => String(field(device, ["category", "type", "kind", "categoryName"], "其他"));
-  const deviceCount = (device) => num(field(device, ["usageCount", "useCount", "usage_count", "usedCount", "count"], 0));
+  const deviceId = (device) => String(field(device, ["No", "id", "deviceId", "device_id", "code", "deviceCode"]));
+  const deviceName = (device) => String(field(device, ["Name", "name", "deviceName", "device_name", "title"], "未命名设备"));
+  const deviceCode = (device) => String(field(device, ["No", "code", "deviceCode", "device_id", "deviceId", "id"], "—"));
+  const deviceCategory = (device) => String(field(device, ["category", "type", "kind", "categoryName"], "共享设备"));
+  const deviceCount = (device) => num(field(device, ["UseCount", "usageCount", "useCount", "usage_count", "usedCount", "count"], 0));
   const deviceDescription = (device) => String(field(device, ["description", "purpose", "intro", "remark"], "查看设备详情与可预约日期。"));
   const isAvailable = (device) => field(device, ["available", "isAvailable", "is_available"], null);
 
@@ -89,9 +89,18 @@
     return '<svg viewBox="0 0 180 120" aria-hidden="true"><path d="M39 25h102v76H39z" fill="#596c65"/><path d="M49 34h82v56H49z" fill="#d9d0bb"/><path d="M57 40h66v44H57z" fill="#b9d4cf"/><path d="M68 48h44v5H68zm0 12h44v5H68zm0 12h25v5H68z" fill="#879c8d"/><path d="M30 101h120l-12 9H42z" fill="#796b56"/><circle cx="133" cy="96" r="2" fill="#ffd47f"/><path d="M87 89v12" stroke="#6a665c" stroke-width="4"/><path d="M71 24v-8h39v8" fill="none" stroke="#9b7959" stroke-width="5"/></svg>';
   }
 
+  function filteredDevices() {
+    const query = state.search.toLocaleLowerCase();
+    return state.allDevices.filter((device) => {
+      const haystack = [device.No, device.Name].join(" ").toLocaleLowerCase();
+      return haystack.includes(query);
+    });
+  }
   function renderDevices() {
     const container = $("#deviceList");
-    const visible = state.devices;
+    const filtered = filteredDevices();
+    state.totalDevices = filtered.length;
+    const visible = filtered.slice((state.page - 1) * pageSize, state.page * pageSize);
     $("#deviceCount").textContent = state.totalDevices + " 件设备";
     if (!visible.length) {
       container.innerHTML = '<div class="empty-state"><span class="empty-illustration">⌕</span><span>' +
@@ -118,7 +127,7 @@
     });
     $$("[data-history]").forEach((button) => button.addEventListener("click", (event) => {
       event.stopPropagation();
-      const device = state.devices.find((item) => deviceId(item) === button.dataset.history);
+      const device = state.allDevices.find((item) => deviceId(item) === button.dataset.history);
       if (device) loadHistory(device);
     }));
     $("#pageLabel").textContent = "第 " + state.page + " 页";
@@ -129,15 +138,15 @@
   }
 
   async function loadDevices() {
-    const params = { page: state.page, pageSize, category: state.category === "全部" ? "" : state.category, search: state.search };
     try {
-      const result = await window.Service.getDevices(params);
+      const result = await window.Service.getDevices();
       const payload = unwrap(result.data);
-      state.devices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
-      state.totalDevices = num(field(payload, ["total", "totalCount", "totalElements", "count"], state.devices.length));
+      state.allDevices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
+      state.devices = state.allDevices;
+      state.totalDevices = filteredDevices().length;
       state.stale = !!result.stale;
       updateConnection(result);
-      if (state.selectedDeviceId && !state.devices.some((d) => deviceId(d) === state.selectedDeviceId)) {
+      if (state.selectedDeviceId && !state.allDevices.some((d) => deviceId(d) === state.selectedDeviceId)) {
         state.selectedDeviceId = "";
       }
       renderDevices();
@@ -149,6 +158,7 @@
       else renderCalendar();
     } catch (error) {
       state.devices = [];
+      state.allDevices = [];
       state.totalDevices = 0;
       renderDevices();
       showError(error.message);
@@ -160,7 +170,7 @@
     state.currentHistoryDevice = null;
     state.usagePage = 1;
     renderDevices();
-    const selected = state.devices.find((device) => deviceId(device) === id);
+    const selected = state.allDevices.find((device) => deviceId(device) === id);
     $("#selectedDeviceLabel").textContent = selected ? deviceName(selected) + " · " + deviceCode(selected) : "选择设备查看使用日期";
     await loadCalendar();
     if (selected) await loadHistory(selected);
@@ -262,23 +272,23 @@
 
   function recordFields(record) {
     return {
-      time: String(field(record, ["timeRange", "time", "period", "slot"], "时段未提供")),
-      device: String(field(record, ["deviceName", "name", "device_name"], "设备")),
-      id: String(field(record, ["deviceCode", "deviceId", "device_id", "code"], "—")),
+      time: String(field(record, ["date", "UseDate", "timeRange", "time", "period", "slot"], "时段未提供")),
+      device: String(field(record, ["deviceName", "Name", "name", "device_name"], "设备")),
+      id: String(field(record, ["deviceCode", "No", "deviceId", "device_id", "code"], "—")),
       user: String(field(record, ["userName", "user", "borrower", "operator"], "—")),
       purpose: String(field(record, ["purpose", "usage", "description", "remark"], "—")),
       status: String(field(record, ["statusText", "status", "state"], "")),
-      registration: String(field(record, ["registeredAt", "registrationTime", "createdAt", "registerTime"], ""))
+      registration: String(field(record, ["registration", "RegTime", "registeredAt", "registrationTime", "createdAt", "registerTime"], ""))
     };
   }
   function renderUsage(records, mode, total) {
     const tbody = $("#usageRows");
     const thead = $(".usage-table thead");
     if (mode === "history") {
-      thead.innerHTML = "<tr><th>使用日期</th><th>设备</th><th>使用者</th><th>用途</th><th>状态</th></tr>";
+      thead.innerHTML = "<tr><th>使用日期</th><th>设备编号</th><th>状态</th></tr>";
       $("#usageTitle").textContent = "设备预约历史";
     } else {
-      thead.innerHTML = "<tr><th>时段</th><th>设备</th><th>使用者</th><th>用途</th><th>状态</th></tr>";
+      thead.innerHTML = "<tr><th>使用日期</th><th>设备编号</th><th>状态</th></tr>";
       $("#usageTitle").textContent = "当日使用登记";
     }
     state.usageTotal = Number.isFinite(Number(total)) ? Number(total) : records.length;
@@ -287,23 +297,23 @@
     $("#usagePrev").disabled = state.usagePage <= 1;
     $("#usageNext").disabled = state.usagePage >= maxPages;
     if (!records.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "该日期暂无空闲设备记录" : "该日期暂无使用登记")) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="3" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "该日期暂无空闲设备记录" : "该日期暂无使用登记")) + "</td></tr>";
       return;
     }
     let entries = records.slice();
-    if (mode === "history") entries.sort((a, b) => String(field(a, ["registeredAt", "registrationTime", "createdAt", "registerTime"], "")).localeCompare(String(field(b, ["registeredAt", "registrationTime", "createdAt", "registerTime"], ""))));
+    if (mode === "history") entries.sort((a, b) => String(field(b, ["registration", "RegTime", "registeredAt", "registrationTime", "createdAt", "registerTime"], "")).localeCompare(String(field(a, ["registration", "RegTime", "registeredAt", "registrationTime", "createdAt", "registerTime"], ""))));
     let previousRegistration = "";
     tbody.innerHTML = entries.map((record) => {
       const row = recordFields(record);
       const status = row.status || (mode === "idle" ? "空闲" : "已登记");
       const statusClass = /中|进行/i.test(status) ? "in-use" : (mode === "idle" ? "idle" : "");
-      const first = mode === "history" ? String(field(record, ["useDate", "date", "usageDate", "startDate"], "—")).slice(0, 10) : row.time;
+      const first = mode === "history" ? String(field(record, ["useDate", "UseDate", "date", "usageDate", "startDate"], "—")).slice(0, 10) : row.time;
       let group = "";
       if (mode === "history" && row.registration && row.registration !== previousRegistration) {
         previousRegistration = row.registration;
-        group = '<tr class="history-group"><td colspan="5">登记时间 · ' + escapeHtml(row.registration) + "</td></tr>";
+        group = '<tr class="history-group"><td colspan="3">登记时间 · ' + escapeHtml(row.registration) + "</td></tr>";
       }
-      return group + "<tr><td>" + escapeHtml(first) + "</td><td>" + escapeHtml(row.device) + ' <span class="device-code">' + escapeHtml(row.id) + "</span></td><td>" + escapeHtml(row.user) + "</td><td>" + escapeHtml(row.purpose) + '</td><td><span class="table-status ' + statusClass + '">' + escapeHtml(status) + "</span></td></tr>";
+      return group + "<tr><td>" + escapeHtml(first) + "</td><td>" + escapeHtml(row.device) + ' <span class="device-code">' + escapeHtml(row.id) + "</span></td><td><span class=\"table-status " + statusClass + "\">" + escapeHtml(status) + "</span></td></tr>";
     }).join("");
   }
   async function loadDailyUsage() {
@@ -345,7 +355,7 @@
   function populateBookingDevices() {
     const select = $("#bookingDevice");
     if (!select) return;
-    select.innerHTML = state.devices.map((device) => '<option value="' + escapeHtml(deviceId(device)) + '">' +
+    select.innerHTML = state.allDevices.map((device) => '<option value="' + escapeHtml(deviceId(device)) + '">' +
       escapeHtml(deviceName(device) + " · " + deviceCode(device)) + "</option>").join("");
     if (state.selectedDeviceId) select.value = state.selectedDeviceId;
   }
@@ -383,8 +393,7 @@
     try {
       const result = await window.Service.createReservation({
         deviceId: $("#bookingDevice").value,
-        dates: state.bookingDates.slice(),
-        purpose: $("#bookingPurpose").value.trim()
+        dates: state.bookingDates.slice()
       });
       const payload = unwrap(result.data);
       $("#bookingMessage").textContent = field(payload, ["message", "msg"], "预约请求已提交。");
@@ -409,11 +418,11 @@
   function renderStatsDeviceOptions() {
     const node = $("#statsDeviceList");
     if (!node) return;
-    if (!state.devices.length) {
+    if (!state.allDevices.length) {
       node.innerHTML = '<p class="table-empty">服务端未返回设备</p>';
       return;
     }
-    node.innerHTML = state.devices.map((device) => {
+    node.innerHTML = state.allDevices.map((device) => {
       const id = deviceId(device);
       return '<label class="stats-device"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span>' + escapeHtml(deviceName(device)) + "</span></label>";
     }).join("");
@@ -429,17 +438,18 @@
       return;
     }
     try {
-      const result = await window.Service.getStatistics({ period: state.statsPeriod, deviceIds: state.statsSelection });
+      $("#statsRange").textContent = "累计使用次数";
+      const result = await window.Service.getStatistics({ deviceIds: state.statsSelection });
       updateConnection(result);
       const rows = listFrom(result.data, ["items", "statistics", "stats", "devices", "rows"]);
       if (!rows.length) {
         node.innerHTML = '<p class="table-empty">' + (state.stale ? "缓存中没有该统计结果" : "服务端暂未返回统计数据") + "</p>";
         return;
       }
-      const counts = rows.map((item) => num(field(item, ["count", "usageCount", "useCount", "total", "value"], 0)));
+      const counts = rows.map((item) => num(field(item, ["UseCount", "count", "usageCount", "useCount", "total", "value"], 0)));
       const maximum = Math.max(1, ...counts);
       node.innerHTML = rows.map((item, index) => {
-        const name = String(field(item, ["deviceName", "name", "label"], deviceName(state.devices.find((d) => deviceId(d) === String(field(item, ["deviceId", "id", "code"]))) || {})));
+        const name = String(field(item, ["Name", "deviceName", "name", "label"], deviceName(state.allDevices.find((d) => deviceId(d) === String(field(item, ["No", "deviceId", "id", "code"]))) || {})));
         const count = counts[index];
         return '<div class="bar-row"><span class="bar-name" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><div class="bar-track"><div class="bar-fill" style="--bar-width:' + Math.round(count / maximum * 100) + '%"></div></div><span class="bar-value">' + count + "</span></div>";
       }).join("");
@@ -470,23 +480,13 @@
   }
   function bindEvents() {
     $$(".role-button").forEach((button) => button.addEventListener("click", () => setRole(button.dataset.role)));
-    $("#prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; loadDevices(); } });
-    $("#nextPage").addEventListener("click", () => { if (state.page * pageSize < state.totalDevices) { state.page++; loadDevices(); } });
+    $("#prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderDevices(); } });
+    $("#nextPage").addEventListener("click", () => { if (state.page * pageSize < filteredDevices().length) { state.page++; renderDevices(); } });
     $("#deviceSearch").addEventListener("input", (event) => {
       clearTimeout(state.searchTimer);
       state.search = event.target.value.trim();
-      state.searchTimer = setTimeout(() => { state.page = 1; loadDevices(); }, 280);
+      state.searchTimer = setTimeout(() => { state.page = 1; renderDevices(); }, 180);
     });
-    $$(".category-tab").forEach((button) => button.addEventListener("click", () => {
-      state.category = button.dataset.category;
-      state.page = 1;
-      $$(".category-tab").forEach((tab) => {
-        const active = tab === button;
-        tab.classList.toggle("is-active", active);
-        tab.setAttribute("aria-selected", String(active));
-      });
-      loadDevices();
-    }));
     $("#prevMonth").addEventListener("click", () => changeMonth(-1));
     $("#nextMonth").addEventListener("click", () => changeMonth(1));
     $$(".view-button").forEach((button) => button.addEventListener("click", () => {
@@ -539,8 +539,6 @@
     $("#usageDate").textContent = prettyDate(state.selectedDate);
     setStatus("连接中", "", "正在连接课程模拟服务端");
     setRole(state.role);
-    try { await window.Service.checkHealth(); updateConnection({ stale: false }); }
-    catch (error) { showError(error.message); }
     await loadDevices();
     if (!state.selectedDeviceId) renderCalendar();
   }
