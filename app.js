@@ -91,6 +91,22 @@
     $("#loginScreen").hidden = false;
     $("#loginError").textContent = "";
   }
+  function clearLoadedServiceData() {
+    state.devices = [];
+    state.allDevices = [];
+    state.totalDevices = 0;
+    state.selectedDeviceId = "";
+    state.calendarEvents = [];
+    state.calendarReady = false;
+    state.calendarDeviceId = "";
+    state.currentHistoryDevice = null;
+    state.statsSelection = [];
+    state.statsRows = [];
+    state.statsRequestId++;
+    state.stale = false;
+    state.usagePage = 1;
+    state.usageTotal = 0;
+  }
   async function enterDemoSession(role, account, persist = true) {
     state.role = role;
     state.account = account;
@@ -122,6 +138,7 @@
       return;
     }
     $("#loginError").textContent = "";
+    clearLoadedServiceData();
     enterDemoSession(match.role, account);
   }
   function startFullDemo(event) {
@@ -134,6 +151,7 @@
   }
   function logoutDemo() {
     localStorage.removeItem("wu-jin-qi-yong:demo-session");
+    clearLoadedServiceData();
     state.demoMode = false;
     window.Service = courseService;
     state.role = "user";
