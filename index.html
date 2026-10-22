@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="config.js"></script>
   <script src="api.js" defer></script>
+  <script src="demo-service.js" defer></script>
   <script src="workflow.js" defer></script>
   <script src="app.js" defer></script>
 </head>
@@ -31,6 +32,10 @@
             <p class="login-error" id="loginError" role="alert"></p>
             <button class="primary-button login-submit" type="submit">进入工作台 <span>→</span></button>
           </form>
+          <div class="full-demo-entry" aria-label="完整流程演示">
+            <div><strong>先体验完整流程</strong><span>内置设备、预约冲突、报修与维护示例，无需启动服务端</span></div>
+            <div class="full-demo-buttons"><button type="button" data-demo-start="user">使用者体验</button><button type="button" data-demo-start="admin">管理员体验</button></div>
+          </div>
           <div class="demo-credentials"><strong>课程演示账号</strong><span>使用者：student / demo123</span><span>管理员：admin / demo123</span></div>
           <p class="demo-limit">演示账号由前端校验，不连接真实身份认证；管理员身份不能用于真实权限控制。</p>
         </section>

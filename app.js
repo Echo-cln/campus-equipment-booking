@@ -6,7 +6,9 @@
   const today = new Date();
   const calendarMinYear = Number((window.SITE_CONFIG || {}).calendarMinYear) || 2000;
   const calendarMaxYear = Number((window.SITE_CONFIG || {}).calendarMaxYear) || 2100;
+  const courseService = window.Service;
   const state = {
+    demoMode: false,
     role: "user", account: "student", adminView: true,
     page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
@@ -93,10 +95,11 @@
     state.role = role;
     state.account = account;
     state.adminView = role === "admin";
-    if (persist) localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account }));
+    if (persist) localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account, demoMode: state.demoMode }));
     document.body.classList.add("is-authenticated");
     $("#loginScreen").hidden = true;
-    $("#identityChip").textContent = "课程演示 · " + (role === "admin" ? "管理员" : "使用者");
+    $("#identityChip").textContent = (state.demoMode ? "完整体验 · " : "课程演示 · ") + (role === "admin" ? "管理员" : "使用者");
+    setStatus(state.demoMode ? "完整体验数据" : "连接中", state.demoMode ? "online" : "", state.demoMode ? "当前使用浏览器本地演示数据，不连接课程服务端" : "正在连接课程模拟服务端");
     setRoleView();
     window.FeatureDesk?.setContext({ role, account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
     if (!state.allDevices.length) await loadDevices();
@@ -104,6 +107,8 @@
   }
   function handleDemoLogin(event) {
     event.preventDefault();
+    state.demoMode = false;
+    window.Service = courseService;
     const accounts = {
       student: { password: "demo123", role: "user" },
       admin: { password: "demo123", role: "admin" }
@@ -119,8 +124,18 @@
     $("#loginError").textContent = "";
     enterDemoSession(match.role, account);
   }
+  function startFullDemo(event) {
+    const role = event.currentTarget.dataset.demoStart;
+    state.demoMode = true;
+    window.Service = window.DemoService;
+    const account = role === "admin" ? "admin" : "student";
+    localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account, demoMode: true }));
+    enterDemoSession(role, account, false);
+  }
   function logoutDemo() {
     localStorage.removeItem("wu-jin-qi-yong:demo-session");
+    state.demoMode = false;
+    window.Service = courseService;
     state.role = "user";
     state.adminView = false;
     showLogin();
@@ -138,7 +153,9 @@
     node.className = "server-status " + (kind || "");
     $(".status-label", node).textContent = label;
     node.title = detail || label;
-    $("#offlineNote").textContent = kind === "offline"
+    $("#offlineNote").textContent = state.demoMode
+      ? "完整体验环境：示例数据仅保存在当前浏览器，不写入课程服务端"
+      : kind === "offline"
       ? "离线只读：显示此前成功读取并缓存的数据"
       : "数据由课程模拟服务端提供";
   }
@@ -149,6 +166,9 @@
     if (result && result.stale) {
       state.stale = true;
       setStatus("离线 · 只读", "offline", "当前显示的是上次读取的缓存数据");
+    } else if (state.demoMode) {
+      state.stale = false;
+      setStatus("完整体验数据", "online", "当前使用浏览器本地演示数据，不连接课程服务端");
     } else if (window.Service.online) {
       state.stale = false;
       setStatus("服务端在线", "online", "已连接课程模拟服务端");
@@ -234,6 +254,7 @@
       const result = await window.Service.getDevices();
       const payload = unwrap(result.data);
       state.allDevices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
+      if (state.demoMode) window.FeatureDesk?.seedDemoData(state.allDevices);
       window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
       state.statsSelection = state.statsSelection.filter((id) => state.allDevices.some((device) => deviceId(device) === id));
       state.devices = state.allDevices;
@@ -251,6 +272,11 @@
       }
       if (state.selectedDeviceId) await loadCalendar();
       else renderCalendar();
+      if (state.demoMode && state.role === "admin") {
+        if (!state.statsSelection.length) state.statsSelection = state.allDevices.map(deviceId);
+        renderStatsDeviceOptions();
+        loadStatistics();
+      }
     } catch (error) {
       state.devices = [];
       state.allDevices = [];
@@ -529,7 +555,7 @@
   function openBooking() {
     if (!window.Service.online || state.stale) { notify("离线只读状态下不能提交预约"); return; }
     if (!state.selectedDeviceId || !state.selectedDate) { notify("请先选择设备和日期"); return; }
-    if (state.calendarDeviceId === state.selectedDeviceId && state.calendarEvents.some((item) => item.date === state.selectedDate && item.booked)) { notify("所选日期已有登记，请换一个日期"); return; }
+    if (!state.demoMode && state.calendarDeviceId === state.selectedDeviceId && state.calendarEvents.some((item) => item.date === state.selectedDate && item.booked)) { notify("所选日期已有登记，请换一个日期"); return; }
     const selected = state.allDevices.find((device) => deviceId(device) === state.selectedDeviceId);
     if (selected && deviceCondition(selected).unavailable) { notify("该设备在服务端标记为故障或停用，暂不能预约"); return; }
     if (window.FeatureDesk?.deviceBlocked(state.selectedDeviceId)) { notify("该设备在演示工作台中已暂停预约，请查看报修处理记录"); return; }
@@ -598,7 +624,9 @@
     try {
       const result = await window.Service.createReservation({
         deviceId: requestedDeviceId,
-        dates: requestedDates
+        dates: requestedDates,
+        startTime,
+        endTime
       });
       const payload = unwrap(result.data);
       const message = field(payload, ["message", "msg"], "服务端未返回冲突，预约请求已提交。");
@@ -848,6 +876,7 @@
   function bindEvents() {
     document.addEventListener("workflow:update", () => renderDevices());
     $("#loginForm").addEventListener("submit", handleDemoLogin);
+    $$('[data-demo-start]').forEach((button) => button.addEventListener("click", startFullDemo));
     $("#logoutButton").addEventListener("click", logoutDemo);
     $("#detailContactButton").addEventListener("click", () => openContactDialog());
     $("#detailHistoryButton").addEventListener("click", () => {
@@ -974,7 +1003,7 @@
       const date = $("#bookingDatePicker").value;
       if (!date) { notify("先选择一个日期"); return; }
       if (state.bookingDates.includes(date)) { notify("这个日期已经添加"); return; }
-      if (String($("#bookingDevice").value) === String(state.calendarDeviceId) && state.calendarEvents.some((item) => item.date === date && item.booked)) { notify("该日期已有登记，请换一个日期"); return; }
+      if (!state.demoMode && String($("#bookingDevice").value) === String(state.calendarDeviceId) && state.calendarEvents.some((item) => item.date === date && item.booked)) { notify("该日期已有登记，请换一个日期"); return; }
       if (state.bookingDates.length >= 5) { notify("一次最多选择五个日期"); return; }
       state.bookingDates.push(date);
       state.bookingDates.sort();
@@ -982,7 +1011,7 @@
     });
 
     $("#serverStatus").addEventListener("click", () => {
-      notify(window.Service.online ? "当前已连接课程模拟服务端" : "当前离线，只能查看此前缓存的数据");
+      notify(state.demoMode ? "当前使用本机完整演示数据，不连接课程模拟服务端" : (window.Service.online ? "当前已连接课程模拟服务端" : "当前离线，只能查看此前缓存的数据"));
     });
   }
   async function start() {
@@ -999,7 +1028,9 @@
       const session = JSON.parse(saved);
       const valid = (session.account === "student" && session.role === "user") || (session.account === "admin" && session.role === "admin");
       if (!valid) throw new Error("invalid demo session");
-      setStatus("连接中", "", "正在连接课程模拟服务端");
+      state.demoMode = Boolean(session.demoMode);
+      window.Service = state.demoMode ? window.DemoService : courseService;
+      setStatus(state.demoMode ? "完整体验数据" : "连接中", state.demoMode ? "online" : "", state.demoMode ? "当前使用浏览器本地演示数据，不连接课程服务端" : "正在连接课程模拟服务端");
       await enterDemoSession(session.role, session.account, false);
     } catch {
       localStorage.removeItem("wu-jin-qi-yong:demo-session");

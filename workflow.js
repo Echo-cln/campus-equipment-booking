@@ -91,8 +91,8 @@
       mine.innerHTML = issueHtml + waitHtml || '<p class="workflow-empty">暂无问题记录或候补。</p>';
     }
     if (admin) admin.innerHTML = rows.length ? rows.map((r) => '<article class="issue-row"><div><span class="workflow-status status-' + (r.status === "已解决" ? "completed" : "pending") + '">' + esc(r.status) + '</span><strong>' + esc(r.deviceName || deviceName(r.deviceId)) + '</strong><small>' + esc(r.type) + ' · ' + esc(r.account) + ' · ' + esc(r.createdAt) + '</small><p>' + esc(r.description) + '</p></div><div class="issue-actions"><button type="button" class="text-button" data-issue="' + esc(r.id) + '" data-state="处理中">接手</button><button type="button" class="text-button" data-issue="' + esc(r.id) + '" data-state="已解决">解决</button><button type="button" class="text-button" data-block="' + esc(r.id) + '">' + (r.blocked ? "恢复预约" : "暂停预约") + '</button></div></article>').join("") : '<p class="workflow-empty">暂无问题记录，用户提交后会出现在这里。</p>';
-    $$('[data-issue]').forEach((button) => button.addEventListener("click", () => { const row = data.issues.find((r) => r.id === button.dataset.issue); if (row) { row.status = button.dataset.state; if (row.status === "已解决") row.blocked = false; } persist(); renderAll(); }));
-    $$('[data-block]').forEach((button) => button.addEventListener("click", () => { const row = data.issues.find((r) => r.id === button.dataset.block); if (row) { row.blocked = !row.blocked; if (row.blocked && row.status === "已解决") row.status = "处理中"; } persist(); renderAll(); }));
+    $$('[data-issue]').forEach((button) => button.addEventListener("click", () => setIssueState(button.dataset.issue, button.dataset.state)));
+    $$('[data-block]').forEach((button) => button.addEventListener("click", () => toggleIssueBlock(button.dataset.block)));
   }
   function renderMaintenance() {
     const rows = data.maintenance.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -120,6 +120,8 @@
   function updateCondition(reservationId, note) { const r = data.reservations.find((x) => x.id === reservationId); if (r) { r.returnNote = note; persist(); } }
   function notifyWaitlist(r) { const releasedDates = (r.dates || []).concat(r.serverDates || []); data.waitlist.filter((w) => String(w.deviceId) === String(r.deviceId) && releasedDates.includes(w.date)).forEach((w) => { w.status = "有空档待确认"; w.notifiedAt = now(); }); }
   function completeReservation(reservationId) { const r = data.reservations.find((x) => x.id === reservationId); if (!r) return; if (![0, 1, 2].every((key) => r.handoff && r.handoff[key]) || !String(r.returnNote || "").trim()) { notify("请完成外观、配件、功能检查并记录归还状态"); return; } if (/异常|损坏|故障|缺失|破损|无法|不正常/.test(r.returnNote)) data.issues.unshift({ id: id(), deviceId: r.deviceId, deviceName: r.deviceName, account: r.account, type: "归还检查异常", description: r.returnNote, status: "待处理", blocked: false, createdAt: now() }); r.status = "completed"; r.completedAt = now(); notifyWaitlist(r); persist(); renderAll(); notify("已在本机演示中记录归还；如描述异常，系统已生成待处理问题。候补账号可查看空档提示"); }
+  function setIssueState(issueId, status) { const row = data.issues.find((r) => r.id === issueId); if (!row) return; row.status = status; if (status === "已解决") row.blocked = false; persist(); renderAll(); }
+  function toggleIssueBlock(issueId) { const row = data.issues.find((r) => r.id === issueId); if (!row) return; row.blocked = !row.blocked; if (row.blocked && row.status === "已解决") row.status = "处理中"; persist(); renderAll(); }
   function requestCancel(reservationId) { const r = data.reservations.find((x) => x.id === reservationId); if (!r) return; r.status = "cancel_requested"; persist(); renderAll(); notify("已记录取消申请；课程服务端不支持撤销预约，请另行联系管理员"); }
   function resolveCancel(reservationId) { const r = data.reservations.find((x) => x.id === reservationId); if (!r) return; r.status = "cancelled"; r.cancelledAt = now(); notifyWaitlist(r); persist(); renderAll(); notify("已在本机演示中处理取消申请；候补账号可查看空档提示，课程服务端登记未改变"); }
   function toggleConfirm(reservationId) { const r = data.reservations.find((x) => x.id === reservationId); if (!r) return; r.status = r.status === "confirmed" ? "pending" : "confirmed"; r.confirmedBy = context.account; persist(); renderAll(); }
@@ -186,6 +188,33 @@
     optionsFor("#issueDevice"); optionsFor("#maintenanceDevice"); renderAll();
     const admin = $("#adminService"); if (admin) admin.hidden = context.role !== "admin";
   }
+  function seedDemoData(devices) {
+    const key = "wu-jin-qi-yong:complete-demo-seeded:v1";
+    try { if (localStorage.getItem(key)) return; } catch { /* continue with the in-memory seed */ }
+    const plusDays = (offset) => {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offset);
+      return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+    };
+    const deviceById = (deviceId) => devices.find((d) => String(d.No ?? d.id ?? d.deviceId) === deviceId);
+    const name = (deviceId) => String(deviceById(deviceId)?.Name ?? deviceById(deviceId)?.name ?? deviceId);
+    const tomorrow = plusDays(1), inTwoDays = plusDays(2), inThreeDays = plusDays(3);
+    const demoReservations = [
+      { id: "sample-admin-camera", deviceId: "CAM-01", deviceName: name("CAM-01"), dates: [tomorrow], serverDates: [tomorrow], startTime: "09:00", endTime: "11:00", purpose: "校园影像采访", account: "admin", allowCoordination: true, status: "confirmed", createdAt: "示例预约 · 管理员已确认", handoff: {} },
+      { id: "sample-student-projector", deviceId: "PROJ-01", deviceName: name("PROJ-01"), dates: [inTwoDays], serverDates: [inTwoDays], startTime: "14:00", endTime: "16:00", purpose: "社团作品分享会", account: "student", allowCoordination: false, status: "pending", createdAt: "示例预约 · 等待确认", handoff: {} }
+    ];
+    data.reservations = demoReservations.filter((sample) => !data.reservations.some((r) => r.id === sample.id)).concat(data.reservations);
+    data.issues = [{ id: "sample-tool-issue", deviceId: "TOOL-01", deviceName: name("TOOL-01"), account: "student", type: "配件检查", description: "精密工具箱的 2.5 mm 内六角扳手疑似缺失，请管理员核对清单。", status: "待处理", blocked: false, createdAt: "示例报修 · 等待管理员处理" }, ...data.issues.filter((r) => r.id !== "sample-tool-issue")];
+    data.maintenance = [{ id: "sample-projector-maintenance", deviceId: "PROJ-01", deviceName: name("PROJ-01"), date: inThreeDays, note: "镜头清洁与线材检查，维护时段暂停预约。", account: "admin" }, ...data.maintenance.filter((m) => m.id !== "sample-projector-maintenance")];
+    data.notices = [
+      { id: "sample-notice-maintenance", category: "设备维护", title: "便携投影仪维护安排", body: inThreeDays + " 进行镜头清洁和线材检查，当日暂不开放预约。", account: "admin", createdAt: "演示公告 · 设备服务台" },
+      { id: "sample-notice-handoff", category: "使用提醒", title: "借还前请核对设备与配件", body: "取用和归还时请完成外观、配件、功能三项检查；发现异常请提交报修。", account: "admin", createdAt: "演示公告 · 设备服务台" },
+      ...data.notices.filter((n) => !["sample-notice-maintenance", "sample-notice-handoff"].includes(n.id))
+    ];
+    data.waitlist = [{ id: "sample-camera-waitlist", account: "student", deviceId: "CAM-01", deviceName: name("CAM-01"), date: tomorrow, status: "等待空档", createdAt: "示例候补" }, ...data.waitlist.filter((w) => w.id !== "sample-camera-waitlist")];
+    persist();
+    try { localStorage.setItem(key, "1"); } catch { /* in-memory demo still works */ }
+    renderAll();
+  }
   function addReservation(entry) {
     data.reservations.unshift({ ...entry, serverDates: (entry.dates || []).slice(), id: id(), status: "pending", createdAt: now(), handoff: {} });
     persist(); renderAll();
@@ -227,5 +256,5 @@
   }
   function notify(message) { const toast = $("#toast"); if (!toast) return; toast.textContent = message; toast.classList.add("show"); clearTimeout(notify.timer); notify.timer = setTimeout(() => toast.classList.remove("show"), 3200); }
   bind();
-  window.FeatureDesk = Object.freeze({ setContext, addReservation, checkConflict, alternatives, recommendDevices, deviceBlocked, render: renderAll });
+  window.FeatureDesk = Object.freeze({ setContext, seedDemoData, addReservation, checkConflict, alternatives, recommendDevices, deviceBlocked, coordinate, answerCoordination, updateHandoff, updateCondition, completeReservation, setIssueState, toggleIssueBlock, render: renderAll });
 })();
