@@ -1,7 +1,8 @@
-/* Configure this value to the URL of the course-provided mock service.
-   Leave empty when the service and this page share an origin. */
+/* Public browser settings. The Supabase publishable/anon key is intended for
+   browser use; RLS is the security boundary. Never put a service_role key here. */
 window.SITE_CONFIG = Object.freeze({
-  apiBaseUrl: "",
+  supabaseUrl: "",
+  supabaseAnonKey: "",
   requestTimeoutMs: 8000,
   pageSize: 5,
   calendarMinYear: 2000,

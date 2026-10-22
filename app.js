@@ -6,15 +6,14 @@
   const today = new Date();
   const calendarMinYear = Number((window.SITE_CONFIG || {}).calendarMinYear) || 2000;
   const calendarMaxYear = Number((window.SITE_CONFIG || {}).calendarMaxYear) || 2100;
-  const courseService = window.Service;
+  window.Service = window.CloudService;
   const state = {
-    demoMode: false,
     role: "user", account: "student", adminView: true,
     page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
     currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false, calendarDeviceId: "",
     usageStatus: "used", usagePage: 1, usageTotal: 0, bookingMode: false, bookingDates: [], statsSelection: [],
-    statsPeriod: "all", statsRange: null, statsRows: [], statsRequestId: 0, currentHistoryDevice: null, myReservations: [], detailDevice: null, stale: false, searchTimer: null
+    statsPeriod: "all", statsRange: null, statsRows: [], statsRequestId: 0, currentHistoryDevice: null, detailDevice: null, stale: false, searchTimer: null
   };
 
   const escapeHtml = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
@@ -47,26 +46,16 @@
   };
   const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
   function deviceCondition(device) {
-    const raw = field(device, ["condition", "Condition", "health", "Health", "deviceStatus", "DeviceStatus", "maintenanceStatus", "MaintenanceStatus", "repairStatus", "RepairStatus", "status", "Status"], "");
+    const raw = field(device, ["condition", "Condition", "health", "Health", "deviceStatus", "DeviceStatus", "maintenanceStatus", "MaintenanceStatus", "repairStatus", "RepairStatus", "statusNote", "status_note"], "");
     const available = field(device, ["available", "isAvailable", "is_available"], null);
     const text = String(raw || "").trim();
     const faultFlag = ["isBroken", "IsBroken", "underMaintenance", "UnderMaintenance", "isDisabled", "IsDisabled"].some((key) => device && (device[key] === true || device[key] === 1));
     if (faultFlag || available === false || available === 0 || /故障|维修|检修|停用|损坏|不可用|报废/.test(text)) return { label: text || "暂停预约", unavailable: true };
-    if (available === true || available === 1) return { label: text || "服务端标记可用", unavailable: false };
-    return { label: text || "服务端未提供", unavailable: /故障|维修|检修|停用|损坏|不可用|报废/.test(text) };
+    if (available === true || available === 1) return { label: text || "开放预约", unavailable: false };
+    return { label: text, unavailable: /故障|维修|检修|停用|损坏|不可用|报废/.test(text) };
   }
-  function displayField(value, fallback = "服务端未提供") {
+  function displayField(value, fallback = "—") {
     return value === undefined || value === null || String(value).trim() === "" ? fallback : String(value);
-  }
-  function readMyReservations() {
-    try {
-      const value = JSON.parse(localStorage.getItem("wu-jin-qi-yong:my-reservations") || "[]");
-      state.myReservations = Array.isArray(value) ? value : [];
-    } catch { state.myReservations = []; }
-  }
-  function saveMyReservation(entry) {
-    state.myReservations = [entry].concat(state.myReservations).slice(0, 30);
-    try { localStorage.setItem("wu-jin-qi-yong:my-reservations", JSON.stringify(state.myReservations)); } catch { /* optional local receipt */ }
   }
   function initCalendarPicker() {
     const yearSelect = $("#calendarYear");
@@ -89,7 +78,6 @@
   function showLogin() {
     document.body.classList.remove("is-authenticated");
     $("#loginScreen").hidden = false;
-    $("#loginError").textContent = "";
   }
   function clearLoadedServiceData() {
     state.devices = [];
@@ -107,57 +95,31 @@
     state.usagePage = 1;
     state.usageTotal = 0;
   }
-  async function enterDemoSession(role, account, persist = true) {
-    state.role = role;
-    state.account = account;
-    state.adminView = role === "admin";
-    if (persist) localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account, demoMode: state.demoMode }));
+  async function enterAuthenticatedSession(identity) {
+    if (!identity) { showLogin(); return; }
+    state.role = identity.role === "admin" ? "admin" : "user";
+    state.account = identity.email;
+    state.identity = identity;
+    state.adminView = state.role === "admin";
+    window.Service = window.CloudService;
+    clearLoadedServiceData();
     document.body.classList.add("is-authenticated");
     $("#loginScreen").hidden = true;
-    $("#identityChip").textContent = (state.demoMode ? "完整体验 · " : "课程演示 · ") + (role === "admin" ? "管理员" : "使用者");
-    setStatus(state.demoMode ? "完整体验数据" : "连接中", state.demoMode ? "online" : "", state.demoMode ? "当前使用浏览器本地演示数据，不连接课程服务端" : "正在连接课程模拟服务端");
+    $("#identityChip").textContent = (identity.displayName || identity.email) + (state.role === "admin" ? " · 管理员" : "");
+    setStatus("云端已连接", "online", "账号与预约数据连接到云端服务");
     setRoleView();
-    window.FeatureDesk?.setContext({ role, account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
-    if (!state.allDevices.length) await loadDevices();
-    else if (role === "admin") { renderStatsDeviceOptions(); loadStatistics(); }
+    window.CloudWorkflow?.setContext(identity);
+    await loadDevices();
+    window.CloudWorkflow?.refresh();
   }
-  function handleDemoLogin(event) {
-    event.preventDefault();
-    state.demoMode = false;
-    window.Service = courseService;
-    const accounts = {
-      student: { password: "demo123", role: "user" },
-      admin: { password: "demo123", role: "admin" }
-    };
-    const account = $("#loginAccount").value.trim().toLowerCase();
-    const password = $("#loginPassword").value;
-    const match = accounts[account];
-    if (!match || match.password !== password) {
-      $("#loginError").textContent = "账号或密码不正确，请使用下方课程演示账号。";
-      $("#loginPassword").value = "";
-      return;
-    }
-    $("#loginError").textContent = "";
+  async function logoutDemo() {
+    await window.AuthService?.signOut();
     clearLoadedServiceData();
-    enterDemoSession(match.role, account);
-  }
-  function startFullDemo(event) {
-    const role = event.currentTarget.dataset.demoStart;
-    state.demoMode = true;
-    window.Service = window.DemoService;
-    const account = role === "admin" ? "admin" : "student";
-    localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account, demoMode: true }));
-    enterDemoSession(role, account, false);
-  }
-  function logoutDemo() {
-    localStorage.removeItem("wu-jin-qi-yong:demo-session");
-    clearLoadedServiceData();
-    state.demoMode = false;
-    window.Service = courseService;
+    window.Service = window.CloudService;
     state.role = "user";
     state.adminView = false;
+    state.identity = null;
     showLogin();
-    $("#loginPassword").value = "";
   }
   function notify(message) {
     const toast = $("#toast");
@@ -171,11 +133,7 @@
     node.className = "server-status " + (kind || "");
     $(".status-label", node).textContent = label;
     node.title = detail || label;
-    $("#offlineNote").textContent = state.demoMode
-      ? "完整体验环境：示例数据仅保存在当前浏览器，不写入课程服务端"
-      : kind === "offline"
-      ? "离线只读：显示此前成功读取并缓存的数据"
-      : "数据由课程模拟服务端提供";
+    $("#offlineNote").textContent = kind === "offline" ? "云端连接中断；需要重新连接后才能提交写入" : "账号、预约与消息保存在校园预约云端";
   }
   function showError(message) {
     setStatus("连接异常", "offline", message);
@@ -184,16 +142,13 @@
     if (result && result.stale) {
       state.stale = true;
       setStatus("离线 · 只读", "offline", "当前显示的是上次读取的缓存数据");
-    } else if (state.demoMode) {
-      state.stale = false;
-      setStatus("完整体验数据", "online", "当前使用浏览器本地演示数据，不连接课程服务端");
     } else if (window.Service.online) {
       state.stale = false;
-      setStatus("服务端在线", "online", "已连接课程模拟服务端");
+      setStatus("云端已连接", "online", "已连接校园预约云端服务");
     }
     $("#reserveButton").disabled = state.stale || !window.Service.online || !state.selectedDeviceId || !state.selectedDate;
     $("#bookingHint").textContent = state.stale
-      ? "离线状态下仅可查看缓存，连接服务端后才能提交预约"
+      ? "云端未连接，当前不能提交预约"
       : (!state.selectedDeviceId || !state.selectedDate ? "选择设备和日期后，可以提交预约" : "已选日期：" + state.selectedDate);
   }
   const deviceId = (device) => String(field(device, ["No", "id", "deviceId", "device_id", "code", "deviceCode"]));
@@ -201,7 +156,7 @@
   const deviceCode = (device) => String(field(device, ["No", "code", "deviceCode", "device_id", "deviceId", "id"], "—"));
   const deviceCategory = (device) => String(field(device, ["category", "type", "kind", "categoryName"], "共享设备"));
   const deviceCount = (device) => num(field(device, ["UseCount", "usageCount", "useCount", "usage_count", "usedCount", "count"], 0));
-  const deviceDescription = (device) => String(field(device, ["description", "purpose", "intro", "remark"], "服务端未提供设备说明。"));
+  const deviceDescription = (device) => String(field(device, ["description", "purpose", "intro", "remark"], ""));
   const isAvailable = (device) => field(device, ["available", "isAvailable", "is_available"], null);
 
   function deviceIllustration(category, index) {
@@ -226,7 +181,7 @@
     $("#deviceCount").textContent = state.totalDevices + " 件设备";
     if (!visible.length) {
       container.innerHTML = '<div class="empty-state"><span class="empty-illustration">⌕</span><span>' +
-        (state.stale ? "没有可用的缓存设备记录" : "服务端暂未返回设备记录") + "</span></div>";
+        (state.stale ? "没有可用的缓存设备记录" : "云端设备目录为空，请管理员导入设备 JSON") + "</span></div>";
       renderStatsDeviceOptions();
       return;
     }
@@ -234,14 +189,14 @@
       const id = deviceId(device);
       const available = isAvailable(device);
       const condition = deviceCondition(device);
-      const demoBlocked = !!window.FeatureDesk?.deviceBlocked(id);
-      const status = demoBlocked ? "本机演示暂停预约" : (condition.unavailable ? condition.label : (available === null ? (condition.label === "服务端未提供" ? "状态待确认" : condition.label) : (available ? "服务端标记可用" : "当天已有登记")));
+      const demoBlocked = false;
+      const status = demoBlocked ? "暂停预约" : (condition.label || (available === null ? "开放状态待确认" : (available ? "可预约" : "当天已有预约")));
       const statusClass = demoBlocked || condition.unavailable ? "busy" : (available === null ? "unknown" : (available ? "" : "busy"));
       const palette = ["#e6ede4", "#f6e5d8", "#f4e8bc", "#dce9e8", "#e8e3d5"];
       return '<article class="device-card ' + (id === state.selectedDeviceId ? "selected" : "") + '" data-device="' + escapeHtml(id) + '" tabindex="0" role="button" aria-pressed="' + (id === state.selectedDeviceId) + '">' +
         '<div class="device-visual" style="--visual-bg:' + palette[((state.page - 1) * pageSize + index) % palette.length] + '"><span class="device-number">' + String((state.page - 1) * pageSize + index + 1).padStart(2, "0") + "</span>" + deviceIllustration(deviceCategory(device), index) + "</div>" +
         '<div class="device-info"><span class="device-kind">' + escapeHtml(deviceCategory(device)) + '</span><div class="device-title-row"><h3 class="device-title">' + escapeHtml(deviceName(device)) + '</h3><span class="device-code">' + escapeHtml(deviceCode(device)) + '</span></div>' +
-        '<p class="device-description">' + escapeHtml(deviceDescription(device)) + '</p><div class="device-meta"><span class="usage-count">' + deviceCount(device) + " 次使用</span><span class=\"availability " + statusClass + '">' + status + '</span></div><div class="device-card-actions"><button type="button" class="device-history" data-detail="' + escapeHtml(id) + '">设备详情</button><button type="button" class="device-history" data-history="' + escapeHtml(id) + '">查看登记历史</button></div></div></article>';
+        '<p class="device-description">' + escapeHtml(deviceDescription(device)) + '</p><div class="device-meta"><span class="usage-count">' + deviceCount(device) + " 次使用</span><span class=\"availability " + statusClass + '">' + escapeHtml(status) + '</span></div><div class="device-card-actions"><button type="button" class="device-history" data-detail="' + escapeHtml(id) + '">设备详情</button><button type="button" class="device-history" data-history="' + escapeHtml(id) + '">查看登记历史</button></div></div></article>';
     }).join("");
     $$(".device-card").forEach((card) => {
       const select = () => selectDevice(card.dataset.device);
@@ -272,8 +227,8 @@
       const result = await window.Service.getDevices();
       const payload = unwrap(result.data);
       state.allDevices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
-      if (state.demoMode) window.FeatureDesk?.seedDemoData(state.allDevices);
-      window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
+      window.CloudWorkflow?.setDevices(state.allDevices);
+      
       state.statsSelection = state.statsSelection.filter((id) => state.allDevices.some((device) => deviceId(device) === id));
       state.devices = state.allDevices;
       state.totalDevices = filteredDevices().length;
@@ -285,12 +240,12 @@
       renderDevices();
       if (!state.selectedDeviceId && state.devices.length) {
         state.selectedDeviceId = deviceId(state.devices[0]);
-        window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
+        
         renderDevices();
       }
       if (state.selectedDeviceId) await loadCalendar();
       else renderCalendar();
-      if (state.demoMode && state.role === "admin") {
+      if (state.role === "admin") {
         if (!state.statsSelection.length) state.statsSelection = state.allDevices.map(deviceId);
         renderStatsDeviceOptions();
         loadStatistics();
@@ -306,7 +261,7 @@
 
   async function selectDevice(id) {
     state.selectedDeviceId = id;
-    window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: id });
+    
     state.currentHistoryDevice = null;
     state.usagePage = 1;
     renderDevices();
@@ -373,12 +328,6 @@
     const firstOffset = (first.getDay() + 6) % 7;
     let start = new Date(state.currentYear, state.currentMonth - 1, 1 - firstOffset);
     const events = new Map(state.calendarEvents.map((event) => [event.date, event]));
-    state.myReservations.filter((entry) => String(entry.deviceId) === String(state.selectedDeviceId) && (state.role === "admin" || !entry.account || entry.account === state.account)).forEach((entry) => {
-      (entry.dates || []).forEach((date) => {
-        const existing = events.get(date) || {};
-        events.set(date, { ...existing, date, booked: true, mine: true, localReceipt: true });
-      });
-    });
     const shown = [];
     let dayCount = 42;
     if ((state.currentView === "week" || state.currentView === "day") && state.selectedDate) {
@@ -408,11 +357,11 @@
       if (event && event.mine) classes.push("is-mine");
       if (event && !event.booked) classes.push("is-idle");
       const disabled = !inMonth && state.currentView === "month";
-      shown.push('<button class="' + classes.join(" ") + '" data-date="' + key + '" ' + (disabled ? "disabled" : "") + ' aria-label="' + key + (event && event.localReceipt ? "，本机有预约提交记录" : event && event.booked ? "，已有登记记录" : "，暂无登记记录") + '">' +
+      shown.push('<button class="' + classes.join(" ") + '" data-date="' + key + '" ' + (disabled ? "disabled" : "") + ' aria-label="' + key + (event && event.mine ? "，我的预约" : event && event.booked ? "，已有预约" : "，暂无预约") + '">' +
         '<span class="day-number">' + date.getDate() + "</span></button>");
     }
     if (error) grid.innerHTML = '<div class="empty-calendar" style="grid-column:1/-1;padding:36px 12px;text-align:center;color:#9b654e">' + escapeHtml(error) + "</div>";
-    else if (!state.calendarReady) grid.innerHTML = '<div class="empty-calendar" style="grid-column:1/-1;padding:36px 12px;text-align:center;color:#918d83">连接服务端后显示可预约日期</div>';
+    else if (!state.calendarReady) grid.innerHTML = '<div class="empty-calendar" style="grid-column:1/-1;padding:36px 12px;text-align:center;color:#918d83">连接云端后显示可预约日期</div>';
     else {
       grid.innerHTML = shown.join("");
       $$(".calendar-day", grid).forEach((button) => button.addEventListener("click", () => handleDateSelection(button.dataset.date)));
@@ -421,7 +370,7 @@
 
   async function handleDateSelection(date) {
     state.selectedDate = date;
-    window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: date, selectedDeviceId: state.selectedDeviceId });
+    
     state.usagePage = 1;
     state.currentView = state.currentView || "month";
     $("#usageDate").textContent = prettyDate(date);
@@ -449,15 +398,15 @@
     const tbody = $("#usageRows");
     $("#usageTitle").textContent = mode === "history" ? "设备登记历史" : "当日使用登记";
     $("#usageDataNote").textContent = mode === "idle"
-      ? "暂无登记只表示接口未返回该日记录；设备故障状态和可借时段仍需服务端或管理员确认。"
-      : "课程接口目前只提供日期登记；未返回的时段、预计时长、登记人或设备状态会明确标出。";
+      ? "没有预约记录不代表设备已完成故障检查；使用前仍请确认设备状态。"
+      : "登记时段、预计时长和状态按云端预约记录显示。";
     state.usageTotal = Number.isFinite(Number(total)) ? Number(total) : records.length;
     const maxPages = Math.max(1, Math.ceil(state.usageTotal / pageSize));
     $("#usagePageLabel").textContent = "第 " + state.usagePage + " / " + maxPages + " 页";
     $("#usagePrev").disabled = state.usagePage <= 1;
     $("#usageNext").disabled = state.usagePage >= maxPages;
     if (!records.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "未找到当天暂无登记的设备" : "该日期暂无使用登记")) + "</td></tr>";
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty">' + (state.stale ? "缓存中没有这组记录" : (mode === "idle" ? "未找到当天可预约的设备" : "该日期暂无预约")) + "</td></tr>";
       return;
     }
     let entries = records.slice();
@@ -468,8 +417,8 @@
       const useDate = String(field(record, ["date", "useDate", "UseDate", "usageDate", "startDate"], state.selectedDate || "—")).slice(0, 10);
       const condition = deviceCondition(record);
       const status = mode === "idle"
-        ? (condition.unavailable ? condition.label : (condition.label === "服务端未提供" ? "设备状态未提供" : condition.label))
-        : (row.status || "已有登记 · 时间未知");
+        ? (condition.unavailable ? condition.label : (condition.label || "可预约"))
+        : (row.status || "待管理员确认");
       const statusClass = condition.unavailable ? "unavailable" : (mode === "idle" ? "idle" : "");
       let group = "";
       if (mode === "history" && row.registration && row.registration !== previousRegistration) {
@@ -477,9 +426,12 @@
         group = '<tr class="history-group"><td colspan="6">登记时间 · ' + escapeHtml(row.registration) + "</td></tr>";
       }
       const first = '<strong>' + escapeHtml(useDate) + '</strong><span class="usage-device-name">' + escapeHtml(row.device) + ' · ' + escapeHtml(row.id) + '</span>';
-      return group + '<tr><td class="usage-device-cell">' + first + '</td><td>' + escapeHtml(displayField(row.time, "接口未提供")) + '</td><td>' + escapeHtml(displayField(row.duration, "接口未提供")) + '</td><td>' + escapeHtml(displayField(row.user, "接口未返回")) + '</td><td><span class="table-status ' + statusClass + '">' + escapeHtml(status) + '</span></td><td><button type="button" class="table-contact" data-contact="' + escapeHtml(row.user) + '">沟通说明</button></td></tr>';
+      const reservationId = field(record, ["reservationId", "reservation_id", "id"], "");
+      const canContact = reservationId && record.allowCoordination !== false && record.isMine !== true;
+      const contact = canContact ? '<button type="button" class="table-contact" data-contact-reservation="' + escapeHtml(reservationId) + '">联系预约者</button>' : '<span class="contact-unavailable">—</span>';
+      return group + '<tr><td class="usage-device-cell">' + first + '</td><td>' + escapeHtml(displayField(row.time)) + '</td><td>' + escapeHtml(displayField(row.duration)) + '</td><td>' + escapeHtml(displayField(row.user)) + '</td><td><span class="table-status ' + statusClass + '">' + escapeHtml(status) + '</span></td><td>' + contact + '</td></tr>';
     }).join("");
-    $$('[data-contact]').forEach((button) => button.addEventListener("click", () => openContactDialog(button.dataset.contact)));
+    $$('[data-contact-reservation]').forEach((button) => button.addEventListener("click", () => openContactDialog("", button.dataset.contactReservation)));
   }
   async function loadDailyUsage() {
     if (!state.selectedDate) { renderUsage([], "used"); return; }
@@ -521,39 +473,44 @@
     state.detailDevice = device;
     const id = deviceId(device);
     const condition = deviceCondition(device);
-    const demoBlocked = !!window.FeatureDesk?.deviceBlocked(id);
+    const demoBlocked = false;
     const currentDay = state.calendarDeviceId === id ? state.calendarEvents.find((event) => event.date === state.selectedDate) : null;
-    const localSubmitted = state.myReservations.some((entry) => String(entry.deviceId) === id && (entry.dates || []).includes(state.selectedDate) && (state.role === "admin" || !entry.account || entry.account === state.account));
+    const localSubmitted = Boolean(currentDay && currentDay.mine);
     const details = [
-      ["设备名称", deviceName(device)], ["设备编号", id], ["设备类别", deviceCategory(device)],
+      ["设备名称", deviceName(device)], ["设备编号", id], ["设备类别", field(device, ["category", "type", "kind", "categoryName"], "")],
       ["累计使用次数", deviceCount(device) + " 次"],
-      ["设备状态", demoBlocked ? "本机演示已暂停预约" : condition.label],
+      ["设备状态", demoBlocked ? "暂停预约" : condition.label],
       ["所在位置", field(device, ["location", "Location", "site", "Site", "room", "Room"], "")],
       ["品牌 / 型号", field(device, ["model", "Model", "brand", "Brand", "specification", "Specification"], "")],
       ["可借时段", field(device, ["availableTime", "AvailableTime", "timeRange", "TimeRange", "openingHours", "OpeningHours"], "")],
       ["单次可借时长", field(device, ["duration", "Duration", "maxDuration", "MaxDuration", "loanPeriod", "LoanPeriod"], "")],
-      ["当前日期登记", localSubmitted ? "本机已提交预约" : (!state.calendarReady ? "日历记录尚未读取" : (currentDay && currentDay.booked ? "服务端已有登记" : "服务端未返回登记"))],
+      ["当前日期登记", localSubmitted ? "我的预约" : (!state.calendarReady ? "日历记录尚未读取" : (currentDay && currentDay.booked ? "已有预约" : "无预约记录"))],
       ["设备说明", deviceDescription(device)]
-    ];
+    ].filter(([label, value]) => value !== undefined && value !== null && String(value).trim() !== "" || label === "设备名称" || label === "设备编号" || label === "累计使用次数");
     $("#deviceDetailTitle").textContent = deviceName(device);
-    $("#deviceDetailIntro").textContent = "设备编号 " + id + " · 详细字段来自服务端设备目录。";
+    $("#deviceDetailIntro").textContent = "设备编号 " + id + " · 仅展示已登记的信息。";
     $("#deviceDetailGrid").innerHTML = details.map(([label, value]) => '<div class="detail-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(displayField(value)) + '</strong></div>').join("");
     $("#deviceDetailNote").textContent = demoBlocked
-      ? "管理员已在本机演示中暂停预约，处理或解决故障记录后可恢复；课程服务端状态未修改。"
+      ? "管理员已暂停此设备的预约。"
       : condition.unavailable
-      ? "服务端标记此设备为故障或停用状态，预约按钮已禁用。"
-      : "预约接口只接收日期；如果没有返回时段、时长或设备状态，请先向管理员确认。";
+      ? "管理员已将此设备标记为故障或停用，暂不能预约。"
+      : "设备状态和维护安排以管理员登记为准。";
     $("#detailReserveButton").disabled = demoBlocked || condition.unavailable || !window.Service.online || state.stale;
     $("#deviceDetailDialog").showModal();
   }
-  function openContactDialog(borrower = "") {
-    const name = String(borrower || "").trim();
-    $("#contactTitle").textContent = name ? "与登记人沟通 · " + name : "沟通与使用协调";
-    $("#contactStatusText").textContent = name
-      ? "接口返回了登记人名称，但没有站内消息接口。若预约所有者开放协调，请在“预约与设备服务”的预约卡片中发起本机演示请求。"
-      : "课程服务端未提供登记人身份和站内消息接口。时段协商请从“预约与设备服务”中的预约卡片发起；故障或安全问题请联系课程管理员。";
+  async function openContactDialog(borrower = "", reservationId = "") {
+    $("#contactTitle").textContent = borrower ? "预约沟通 · " + borrower : "预约沟通";
+    $("#contactStatusText").textContent = "正在打开安全会话…";
+    $("#chatThread").innerHTML = '<p class="chat-empty">正在读取消息…</p>';
     if ($("#deviceDetailDialog").open) $("#deviceDetailDialog").close();
     $("#contactDialog").showModal();
+    try {
+      if (!reservationId) throw new Error("这条旧登记没有预约平台会话，无法私信。请从云端预约记录发起沟通。");
+      await window.AuthService.startChat(reservationId);
+      $("#contactStatusText").textContent = "此对话仅对该预约的参与者开放。";
+      clearInterval(openContactDialog.refreshTimer);
+      openContactDialog.refreshTimer = setInterval(() => window.AuthService.refreshChat(window.currentConversationId), 4000);
+    } catch (error) { $("#chatThread").innerHTML = '<p class="chat-empty">' + escapeHtml(error.message) + '</p>'; }
   }
 
   function populateBookingDevices() {
@@ -571,12 +528,11 @@
     }));
   }
   function openBooking() {
-    if (!window.Service.online || state.stale) { notify("离线只读状态下不能提交预约"); return; }
+    if (!window.Service.online || state.stale) { notify("云端暂不可用，不能提交预约"); return; }
     if (!state.selectedDeviceId || !state.selectedDate) { notify("请先选择设备和日期"); return; }
-    if (!state.demoMode && state.calendarDeviceId === state.selectedDeviceId && state.calendarEvents.some((item) => item.date === state.selectedDate && item.booked)) { notify("所选日期已有登记，请换一个日期"); return; }
     const selected = state.allDevices.find((device) => deviceId(device) === state.selectedDeviceId);
-    if (selected && deviceCondition(selected).unavailable) { notify("该设备在服务端标记为故障或停用，暂不能预约"); return; }
-    if (window.FeatureDesk?.deviceBlocked(state.selectedDeviceId)) { notify("该设备在演示工作台中已暂停预约，请查看报修处理记录"); return; }
+    if (selected && deviceCondition(selected).unavailable) { notify("该设备在管理员已将此设备标记为故障或停用，暂不能预约"); return; }
+
     state.bookingDates = [state.selectedDate];
     populateBookingDevices();
     renderBookingDates();
@@ -592,11 +548,11 @@
   }
   function renderBookingAlternatives(deviceId, dates, startTime, endTime, message) {
     $("#bookingMessage").textContent = message;
-    const slots = window.FeatureDesk?.alternatives(deviceId, dates) || [];
-    const devices = window.FeatureDesk?.recommendDevices(deviceId, dates, startTime, endTime) || [];
+    const slots = [];
+    const devices = [];
     const slotHtml = slots.map((slot) => '<button type="button" class="slot-suggestion" data-slot-start="' + slot.start + '" data-slot-end="' + slot.end + '">' + slot.start + '—' + slot.end + '</button>').join("");
     const deviceHtml = devices.map((device) => '<button type="button" class="slot-suggestion" data-alt-device="' + escapeHtml(device.id) + '">' + escapeHtml(device.name) + ' · ' + escapeHtml(device.id) + '</button>').join("");
-    $("#slotSuggestions").innerHTML = (slotHtml ? '<p>可尝试以下本地空档：</p>' + slotHtml : "") + (deviceHtml ? '<p>也可以查看其他候选设备：</p>' + deviceHtml : "") + (!slotHtml && !deviceHtml ? '<p>暂时没有本地可推荐的空档或设备，请更换日期或加入候补。</p>' : "");
+    $("#slotSuggestions").innerHTML = (slotHtml ? '<p>可查看开放中的其他时段：</p>' + slotHtml : "") + (deviceHtml ? '<p>也可以查看其他候选设备：</p>' + deviceHtml : "") + (!slotHtml && !deviceHtml ? '<p>请选择其他日期或使用下方候补登记。</p>' : "");
   }
   async function submitBooking(event) {
     event.preventDefault();
@@ -605,20 +561,17 @@
       return;
     }
     if (!window.Service.online || state.stale) {
-      $("#bookingMessage").textContent = "当前为离线只读状态，无法提交。";
+      $("#bookingMessage").textContent = "当前无法连接云端，不能提交。";
       return;
     }
     const requestedDeviceId = $("#bookingDevice").value;
     const requestedDates = state.bookingDates.slice();
     const requestedDevice = state.allDevices.find((device) => deviceId(device) === requestedDeviceId);
     if (requestedDevice && deviceCondition(requestedDevice).unavailable) {
-      $("#bookingMessage").textContent = "该设备已被服务端标记为故障或停用，请选择其他设备。";
+      $("#bookingMessage").textContent = "该设备已被标记为故障或停用，请选择其他设备。";
       return;
     }
-    if (window.FeatureDesk?.deviceBlocked(requestedDeviceId)) {
-      $("#bookingMessage").textContent = "该设备在本机演示中已暂停预约，请选择其他设备或联系管理员。";
-      return;
-    }
+
     const startTime = $("#bookingStartTime").value;
     const endTime = $("#bookingEndTime").value;
     if (!startTime || !endTime || startTime >= endTime) {
@@ -630,11 +583,6 @@
       $("#bookingMessage").textContent = "请填写使用用途，便于后续确认。";
       return;
     }
-    const localCheck = window.FeatureDesk?.checkConflict(requestedDeviceId, requestedDates, startTime, endTime);
-    if (localCheck && !localCheck.ok) {
-      renderBookingAlternatives(requestedDeviceId, requestedDates, startTime, endTime, localCheck.message);
-      return;
-    }
     $("#slotSuggestions").innerHTML = "";
     const button = $("#submitBooking");
     button.disabled = true;
@@ -644,27 +592,18 @@
         deviceId: requestedDeviceId,
         dates: requestedDates,
         startTime,
-        endTime
-      });
-      const payload = unwrap(result.data);
-      const message = field(payload, ["message", "msg"], "服务端未返回冲突，预约请求已提交。");
-      $("#bookingMessage").textContent = "提交成功：" + (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + "，" + requestedDates.join("、") + "。" + message;
-      $("#bookingMessage").classList.add("success");
-      saveMyReservation({ deviceId: requestedDeviceId, deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId, dates: requestedDates, account: state.account, submittedAt: new Date().toLocaleString("zh-CN", { hour12: false }) });
-      window.FeatureDesk?.addReservation({
-        deviceId: requestedDeviceId,
-        deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId,
-        dates: requestedDates,
-        startTime,
         endTime,
         purpose,
-        account: state.account,
-        allowCoordination: $("#bookingCoordination").checked,
-        serviceSubmitted: true
+        allowCoordination: $("#bookingCoordination").checked
       });
+      const payload = unwrap(result.data);
+      const message = field(payload, ["message", "msg"], "预约已写入云端。");
+      $("#bookingMessage").textContent = "提交成功：" + (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + "，" + requestedDates.join("、") + "。" + message;
+      $("#bookingMessage").classList.add("success");
+      window.CloudWorkflow?.refresh();
       state.selectedDeviceId = requestedDeviceId;
       state.selectedDate = requestedDates[0];
-      window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
+      
       $("#selectedDeviceLabel").textContent = (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + " · " + requestedDeviceId;
       $("#usageDate").textContent = prettyDate(state.selectedDate);
       notify("预约已提交，结果记录在使用区下方");
@@ -677,7 +616,7 @@
       const errorMessage = error.payload && (error.payload.message || error.payload.error)
         ? error.payload.message || error.payload.error
         : error.message;
-      renderBookingAlternatives(requestedDeviceId, requestedDates, startTime, endTime, errorMessage + " 也可参考下方本地推荐。");
+      renderBookingAlternatives(requestedDeviceId, requestedDates, startTime, endTime, errorMessage + " 请调整日期或时段后重试。");
       $("#bookingMessage").classList.remove("success");
       updateConnection(null);
     } finally {
@@ -732,8 +671,22 @@
     node.innerHTML = visible.map((device) => {
       const id = deviceId(device);
       const condition = deviceCondition(device);
-      return '<label class="admin-device-row"><input type="checkbox" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span class="admin-device-name">' + escapeHtml(deviceName(device)) + '</span><span class="admin-device-code">' + escapeHtml(id) + '</span><span class="admin-device-count">' + deviceCount(device) + ' 次</span><span class="admin-device-state ' + (condition.unavailable ? "unavailable" : "") + '">' + escapeHtml(condition.label) + '</span></label>';
+      const current = ["available", "maintenance", "disabled", "unknown"].includes(device.status) ? device.status : "unknown";
+      const statusOptions = [["available","开放预约"],["maintenance","维护中"],["disabled","暂停使用"],["unknown","待设置"]]
+        .map(([value,label]) => '<option value="' + value + '" ' + (current === value ? "selected" : "") + '>' + label + '</option>').join("");
+      return '<div class="admin-device-row"><input type="checkbox" aria-label="选择' + escapeHtml(deviceName(device)) + '" value="' + escapeHtml(id) + '" ' + (state.statsSelection.includes(id) ? "checked" : "") + '><span class="admin-device-name">' + escapeHtml(deviceName(device)) + '</span><span class="admin-device-code">' + escapeHtml(id) + '</span><span class="admin-device-count">' + deviceCount(device) + ' 次</span><select aria-label="' + escapeHtml(deviceName(device)) + '的开放状态" class="admin-device-state ' + (condition.unavailable ? "unavailable" : "") + '" data-equipment-status="' + escapeHtml(id) + '">' + statusOptions + '</select></div>';
     }).join("");
+    $$('[data-equipment-status]', node).forEach((select) => select.addEventListener("change", async () => {
+      select.disabled = true;
+      try {
+        await window.AuthService.rest("equipment", { method: "PATCH", query: { device_no: "eq." + select.dataset.equipmentStatus }, body: { status: select.value }, prefer: "return=representation" });
+        const device = state.allDevices.find((item) => deviceId(item) === select.dataset.equipmentStatus);
+        if (device) { device.status = select.value; device.condition = select.value === "available" ? "开放预约" : select.value === "maintenance" ? "维护中" : select.value === "disabled" ? "暂停使用" : ""; device.available = select.value === "unknown" ? null : select.value === "available"; }
+        renderDevices();
+        window.CloudWorkflow?.refresh();
+      } catch (error) { notify("设备状态更新失败：" + error.message); }
+      finally { select.disabled = false; }
+    }));
     $$('.admin-device-row input', node).forEach((input) => input.addEventListener("change", () => {
       if (input.checked && !state.statsSelection.includes(input.value)) state.statsSelection.push(input.value);
       if (!input.checked) state.statsSelection = state.statsSelection.filter((id) => id !== input.value);
@@ -755,10 +708,10 @@
     $("#statsRange").textContent = isCumulative ? "累计使用" : (range ? range.start + " 至 " + range.end : "待选区间");
     $("#selectedUsageTotalLabel").textContent = isCumulative ? "使用次数合计" : "区间登记次数合计";
     $("#selectedUsageAverageLabel").textContent = isCumulative ? "平均使用次数" : "平均区间登记次数";
-    $("#statsPeriodNote").textContent = isCumulative ? "累计统计沿用 UseCount" : "区间统计依据 UseDate 登记记录";
+    $("#statsPeriodNote").textContent = isCumulative ? "累计统计沿用 UseCount" : "区间统计依据预约开始时间";
     $("#statsChartCaption").textContent = isCumulative
       ? "累计次数取自设备目录的 UseCount 字段。"
-      : "按服务端记录中的 UseDate 统计该日期范围内的登记次数；接口没有实际完成状态字段。";
+      : "按数据库中该日期范围内的预约记录统计。";
     if (isPendingCustom) $("#statsChart").innerHTML = '<p class="table-empty">请选择开始日期和结束日期，再点击“应用区间”。</p>';
   }
   function resolveStatsRange(period) {
@@ -773,7 +726,7 @@
   function renderStatsChart(rows, range) {
     const node = $("#statsChart");
     if (!rows.length) {
-      node.innerHTML = '<p class="table-empty">' + (state.stale ? "缓存中没有该范围的设备登记记录" : "服务端暂未返回统计数据") + "</p>";
+      node.innerHTML = '<p class="table-empty">' + (state.stale ? "缓存中没有该范围的设备登记记录" : "云端暂未返回统计数据") + "</p>";
       return;
     }
     const sorted = rows.slice().sort((a, b) => num(b.UseCount) - num(a.UseCount));
@@ -893,8 +846,7 @@
   }
   function bindEvents() {
     document.addEventListener("workflow:update", () => renderDevices());
-    $("#loginForm").addEventListener("submit", handleDemoLogin);
-    $$('[data-demo-start]').forEach((button) => button.addEventListener("click", startFullDemo));
+    document.addEventListener("auth:session", (event) => enterAuthenticatedSession(event.detail));
     $("#logoutButton").addEventListener("click", logoutDemo);
     $("#detailContactButton").addEventListener("click", () => openContactDialog());
     $("#detailHistoryButton").addEventListener("click", () => {
@@ -930,6 +882,19 @@
         ? Array.from(new Set(state.statsSelection.concat(ids)))
         : state.statsSelection.filter((id) => !ids.includes(id));
       renderStatsDeviceOptions(); loadStatistics();
+    });
+    $("#deviceImportFile")?.addEventListener("change", async (event) => {
+      const file = event.currentTarget.files?.[0]; if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        const rows = listFrom(data, ["items", "devices", "rows", "list", "results"]);
+        if (!rows.length || rows.some((item) => !item.No && !item.device_no || !item.Name && !item.name)) throw new Error("文件必须包含含有 No/Name 字段的设备数组。");
+        const normalized = rows.map((item) => ({ No: item.No ?? item.device_no, Name: item.Name ?? item.name, UseCount: item.UseCount ?? item.use_count ?? 0 }));
+        await window.CloudService.importCourseDevices(normalized);
+        notify("已导入 " + normalized.length + " 件设备。请在后台维护设备状态和档案后开放预约。");
+        await loadDevices();
+      } catch (error) { notify("导入失败：" + error.message); }
+      finally { event.currentTarget.value = ""; }
     });
     $("#selectAllDevices").addEventListener("click", () => {
       state.statsSelection = state.allDevices.map(deviceId);
@@ -999,7 +964,7 @@
     $("#bookingForm").addEventListener("submit", submitBooking);
     $("#cancelBooking").addEventListener("click", () => $("#bookingDialog").close());
     $("#bookingDialog").addEventListener("close", () => { state.bookingMode = false; renderCalendar(); });
-    $("#bookingDevice").addEventListener("change", (event) => { state.selectedDeviceId = event.target.value; window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId }); loadCalendar(); });
+    $("#bookingDevice").addEventListener("change", (event) => { state.selectedDeviceId = event.target.value;  loadCalendar(); });
     $("#slotSuggestions").addEventListener("click", (event) => {
       const button = event.target.closest("[data-slot-start]");
       if (button) {
@@ -1013,7 +978,7 @@
       if (alternativeDevice) {
         $("#bookingDevice").value = alternativeDevice.dataset.altDevice;
         state.selectedDeviceId = alternativeDevice.dataset.altDevice;
-        window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
+        
         notify("已切换候选设备；日期与时段保留，请重新提交前核对设备状态");
       }
     });
@@ -1021,7 +986,6 @@
       const date = $("#bookingDatePicker").value;
       if (!date) { notify("先选择一个日期"); return; }
       if (state.bookingDates.includes(date)) { notify("这个日期已经添加"); return; }
-      if (!state.demoMode && String($("#bookingDevice").value) === String(state.calendarDeviceId) && state.calendarEvents.some((item) => item.date === date && item.booked)) { notify("该日期已有登记，请换一个日期"); return; }
       if (state.bookingDates.length >= 5) { notify("一次最多选择五个日期"); return; }
       state.bookingDates.push(date);
       state.bookingDates.sort();
@@ -1029,30 +993,23 @@
     });
 
     $("#serverStatus").addEventListener("click", () => {
-      notify(state.demoMode ? "当前使用本机完整演示数据，不连接课程模拟服务端" : (window.Service.online ? "当前已连接课程模拟服务端" : "当前离线，只能查看此前缓存的数据"));
+      notify(window.Service.online ? "当前已连接预约云端" : "云端暂时无法连接，请检查网络或登录状态");
     });
   }
   async function start() {
     bindEvents();
     initCalendarPicker();
-    readMyReservations();
     state.selectedDate = dateKey(today);
     state.currentView = "month";
     $("#usageDate").textContent = prettyDate(state.selectedDate);
-    localStorage.removeItem("wu-jin-qi-yong:role");
-    const saved = localStorage.getItem("wu-jin-qi-yong:demo-session");
-    if (!saved) { showLogin(); return; }
+    if (!window.AuthService?.configured) { showLogin(); return; }
     try {
-      const session = JSON.parse(saved);
-      const valid = (session.account === "student" && session.role === "user") || (session.account === "admin" && session.role === "admin");
-      if (!valid) throw new Error("invalid demo session");
-      state.demoMode = Boolean(session.demoMode);
-      window.Service = state.demoMode ? window.DemoService : courseService;
-      setStatus(state.demoMode ? "完整体验数据" : "连接中", state.demoMode ? "online" : "", state.demoMode ? "当前使用浏览器本地演示数据，不连接课程服务端" : "正在连接课程模拟服务端");
-      await enterDemoSession(session.role, session.account, false);
-    } catch {
-      localStorage.removeItem("wu-jin-qi-yong:demo-session");
+      const identity = await window.AuthService.init();
+      if (identity) await enterAuthenticatedSession(identity);
+      else showLogin();
+    } catch (error) {
       showLogin();
+      $("#loginError").textContent = error.message || "登录状态检查失败，请重新登录。";
     }
     if (!state.selectedDeviceId && document.body.classList.contains("is-authenticated")) renderCalendar();
   }

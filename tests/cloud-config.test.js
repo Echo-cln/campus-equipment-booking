@@ -1,0 +1,27 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const root = path.join(__dirname, "..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const html = read("index.html");
+const app = read("app.js");
+const auth = read("auth-service.js");
+const cloud = read("cloud-service.js");
+const workflow = read("cloud-workflow.js");
+const sql = read("supabase/migrations/202610220001_initial_schema.sql");
+const config = read("config.js");
+
+for (const id of ["loginAccount", "loginPassword", "authRepeatPassword", "authDisplayName", "chatThread", "chatMessage"]) assert(html.includes(`id="${id}"`), `page includes ${id}`);
+assert(html.includes('data-auth-action="signup"'), "registration entry exists");
+assert(html.includes('data-auth-action="forgot"'), "password recovery entry exists");
+assert(!html.includes("student / demo123") && !html.includes("管理员体验"), "fixed demo credentials and demo role shortcuts are removed");
+assert(!html.includes('<script src="workflow.js"') && !html.includes('<script src="demo-service.js"'), "browser-local demo services are not loaded");
+assert(!app.includes("localStorage") && !app.includes("FeatureDesk"), "business data is not shadowed in browser storage");
+assert(auth.includes('authRequest("signup?redirect_to=') && auth.includes('authRequest(path + "?redirect_to="') && auth.includes('authRequest("verify"'), "real auth endpoints support signup, recovery and email verification");
+assert(cloud.includes("rpc/reservation_slots") && cloud.includes("reservations"), "calendar and booking use cloud data");
+assert(auth.includes('"messages"'), "chat uses a server-backed messages table");
+for (const table of ["profiles", "equipment", "reservations", "messages", "issues", "waitlist", "announcements", "maintenance_windows"]) assert(sql.includes(`alter table public.${table} enable row level security`), `${table} has RLS enabled`);
+assert(sql.includes("exclude using gist"), "overlapping reservations are blocked in Postgres");
+assert(sql.includes("start_reservation_conversation"), "chat conversations require a validated reservation");
+assert(!/service[_-]?role\s*[:=]/i.test(config), "browser configuration does not include a privileged key");
+console.log("Cloud setup checks passed: email auth, cloud records, reservation constraints, role checks and private chat.");

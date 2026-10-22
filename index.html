@@ -9,14 +9,14 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
   <script src="config.js"></script>
-  <script src="api.js" defer></script>
-  <script src="demo-service.js" defer></script>
-  <script src="workflow.js" defer></script>
+  <script src="auth-service.js" defer></script>
+  <script src="cloud-service.js" defer></script>
+  <script src="cloud-workflow.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <section class="login-screen" id="loginScreen">
-    <section class="login-shell" aria-label="登录课程演示工作台">
+    <section class="login-shell" aria-label="登录校园设备预约平台">
       <header class="login-topbar">
       <a class="brand login-brand" href="#home" aria-label="物尽其用">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 35V15c8 0 13 4 16 12 3-8 8-12 16-12v20c-8 0-13 2-16 6-3-4-8-6-16-6Z"/><path d="M24 27v14"/></svg></span><span class="brand-name">物尽其用</span>
@@ -25,19 +25,24 @@
       </header>
       <div class="login-card-wrap">
         <section class="login-panel" aria-labelledby="loginTitle">
-          <div class="login-panel-heading"><span class="section-index">校园共享设备 · 课程演示</span><h1 id="loginTitle">让每一次借用，<br>都有迹可循。</h1><p>登录后查找设备、查看日期并提交预约。</p></div>
-          <form id="loginForm" class="login-form">
-            <label for="loginAccount">账号</label><input id="loginAccount" name="account" autocomplete="username" required placeholder="输入演示账号" />
-            <label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="输入演示密码" />
-            <p class="login-error" id="loginError" role="alert"></p>
-            <button class="primary-button login-submit" type="submit">进入工作台 <span>→</span></button>
+          <div class="login-panel-heading"><span class="section-index">校园共享设备 · 预约与登记</span><h1 id="loginTitle">让每一次借用，<br>都有迹可循。</h1><p id="authIntro">使用邮箱登录，或注册新账号开始预约。</p></div>
+          <form id="loginForm" class="login-form" novalidate>
+            <label for="authDisplayName" id="authDisplayNameLabel" hidden>姓名或称呼</label><input id="authDisplayName" name="displayName" autocomplete="name" maxlength="40" placeholder="填写页面中显示的称呼" hidden />
+            <label for="loginAccount">邮箱</label><input id="loginAccount" name="email" type="email" autocomplete="email" required placeholder="name@example.com" />
+            <label for="loginPassword">密码</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="至少 8 位" />
+            <label for="authRepeatPassword" id="authRepeatPasswordLabel" hidden>重复密码</label><input id="authRepeatPassword" name="repeatPassword" type="password" autocomplete="new-password" minlength="8" placeholder="再次输入密码" hidden />
+            <p class="login-error" id="loginError" role="status" aria-live="polite"></p>
+            <button class="primary-button login-submit" id="authSubmit" type="submit">登录 <span>→</span></button>
           </form>
-          <div class="full-demo-entry" aria-label="完整流程演示">
-            <div><strong>先体验完整流程</strong><span>内置设备、预约冲突、报修与维护示例，无需启动服务端</span></div>
-            <div class="full-demo-buttons"><button type="button" data-demo-start="user">使用者体验</button><button type="button" data-demo-start="admin">管理员体验</button></div>
+          <div class="auth-links" id="authLinks">
+            <button type="button" data-auth-action="signup">注册账号</button>
+            <button type="button" data-auth-action="forgot">忘记密码？</button><button type="button" data-auth-action="resend">重发验证邮件</button>
           </div>
-          <div class="demo-credentials"><strong>课程演示账号</strong><span>使用者：student / demo123</span><span>管理员：admin / demo123</span></div>
-          <p class="demo-limit">演示账号由前端校验，不连接真实身份认证；管理员身份不能用于真实权限控制。</p>
+          <div class="auth-links auth-secondary-links" id="authSecondaryLinks" hidden>
+            <button type="button" data-auth-action="resend">重新发送验证邮件</button>
+            <button type="button" data-auth-action="login">返回登录</button>
+          </div>
+          <p class="auth-setup-note" id="authSetupNote" hidden>认证服务尚未配置。管理员完成项目部署配置后，用户即可注册并通过邮箱验证登录。</p>
         </section>
       </div>
       <footer class="login-footer"><span>设备一览</span><i></i><span>预约登记</span><i></i><span>使用记录</span></footer>
@@ -62,8 +67,8 @@
         <a class="nav-link admin-nav-link" id="adminNavLink" href="#adminPanel" hidden>后台统计</a>
       </nav>
       <div class="top-actions">
-        <span class="identity-chip" id="identityChip">课程演示 · 使用者</span>
-        <button class="server-status" id="serverStatus" type="button" title="查看服务端连接状态">
+        <span class="identity-chip" id="identityChip">已登录</span>
+        <button class="server-status" id="serverStatus" type="button" title="查看云端连接状态">
           <span class="status-dot"></span><span class="status-label">连接中</span>
         </button>
         <button class="logout-button" id="logoutButton" type="button">退出</button>
@@ -126,24 +131,24 @@
                 <div class="calendar-nav"><button class="icon-button" id="prevMonth" aria-label="上个月">‹</button><button class="icon-button" id="nextMonth" aria-label="下个月">›</button></div>
               </div>
             </div>
-            <div class="calendar-legend"><span><i class="legend-dot dot-mine"></i>本机提交记录</span><span><i class="legend-dot dot-busy"></i>已有登记</span><span><i class="legend-dot dot-free"></i>无登记记录</span></div>
+            <div class="calendar-legend"><span><i class="legend-dot dot-mine"></i>我的预约</span><span><i class="legend-dot dot-busy"></i>已有预约</span><span><i class="legend-dot dot-free"></i>暂无预约</span></div>
             <div class="calendar-grid" id="calendarGrid" aria-label="日历">
               <div class="calendar-weekdays"><span>周一</span><span>周二</span><span>周三</span><span>周四</span><span>周五</span><span>周六</span><span>周日</span></div>
-              <div class="calendar-days" id="calendarDays"><div class="empty-calendar">连接服务端后显示可预约日期</div></div>
+              <div class="calendar-days" id="calendarDays"><div class="empty-calendar">连接云端后显示可预约日期</div></div>
             </div>
           </div>
 
           <section class="usage-panel panel" id="usagePanel" aria-labelledby="usageTitle">
             <div class="usage-heading">
               <div><span class="section-index">03 / DAILY LOG</span><h2 id="usageTitle">当日使用登记</h2></div>
-              <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已有登记</button><button data-usage="idle">暂无登记</button></div></div>
+              <div class="usage-filters"><span class="usage-date" id="usageDate">请选择日期</span><div class="segmented" role="group" aria-label="使用状态筛选"><button class="is-active" data-usage="used">已有预约</button><button data-usage="idle">暂无预约</button></div></div>
             </div>
-            <p class="usage-data-note" id="usageDataNote">时段、预计时长、登记人和设备状态以服务端实际提供的数据为准。</p>
+            <p class="usage-data-note" id="usageDataNote">时段、预计时长、登记人和设备状态按云端预约与设备资料显示。</p>
             <div class="usage-table-wrap">
               <table class="usage-table"><thead><tr><th>日期与设备</th><th>登记时段</th><th>预计时长</th><th>登记人</th><th>设备/预约状态</th><th>沟通</th></tr></thead><tbody id="usageRows"><tr><td colspan="6" class="table-empty">选择日期后查看当天设备使用情况</td></tr></tbody></table>
             </div>
             <div class="usage-bottom-bar"><div class="usage-pagination"><span id="usagePageLabel">—</span><div><button class="icon-button" id="usagePrev" aria-label="上一页" disabled>‹</button><button class="icon-button" id="usageNext" aria-label="下一页" disabled>›</button></div></div><button class="primary-button" id="reserveButton" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-12 4h2m3 0h2"/></svg><span>预约所选设备</span><span class="button-arrow">→</span></button></div>
-            <p class="booking-hint" id="bookingHint">选择设备和日期后，可以提交预约；预约时段与可用状态以服务端信息为准。</p>
+            <p class="booking-hint" id="bookingHint">选择设备和日期后，可以提交云端预约；设备开放状态以管理员登记为准。</p>
           </section>
 
         </section>
@@ -155,7 +160,7 @@
             <h2>设备索引</h2>
             <label class="select-current"><input type="checkbox" id="selectCurrentPage"><span>全选本页</span></label>
           </div>
-          <p class="admin-device-note">查看服务端返回的设备状态；故障标记和检修公告需由服务端提供。</p>
+          <p class="admin-device-note">导入设备后，在此设置开放状态；故障标记和维护安排由管理员维护。</p>
           <div class="admin-device-list" id="statsDeviceList"><p class="table-empty">正在读取设备目录…</p></div>
           <div class="admin-device-pagination">
             <span id="statsPageLabel">第 1 页</span>
@@ -165,7 +170,7 @@
         <section class="admin-analysis panel">
           <div class="admin-analysis-heading">
             <div class="admin-title-copy"><span class="section-index">04 / OVERVIEW</span><h2>数据统计</h2><p>按设备目录中的累计使用次数汇总与对比</p></div>
-            <div class="admin-actions"><button class="secondary-button" id="selectAllDevices" type="button">选择全部设备</button><button class="secondary-button" id="clearSelection" type="button">清空选择</button></div>
+            <div class="admin-actions"><label class="secondary-button import-json-button" for="deviceImportFile">导入设备 JSON</label><input id="deviceImportFile" type="file" accept="application/json,.json" hidden><button class="secondary-button" id="selectAllDevices" type="button">选择全部设备</button><button class="secondary-button" id="clearSelection" type="button">清空选择</button></div>
           </div>
           <div class="stats-summary" aria-label="已选设备汇总">
             <article class="summary-card"><strong id="selectedDeviceTotal">0</strong><span>已选设备</span></article>
@@ -194,8 +199,9 @@
       </section>
 
       <section class="service-desk info-section" id="serviceDesk" aria-labelledby="serviceDeskTitle">
-        <div class="info-heading service-desk-heading"><div><span class="section-index">RESERVATION / SERVICE DESK</span><h2 id="serviceDeskTitle">预约与设备服务</h2><p>查看预约进度、安排交接、报告设备问题，并跟进维护信息。</p></div><span class="local-badge">本机演示数据</span></div>
-        <p class="service-demo-note">以下协作功能保存在当前浏览器中，用于流程演示；课程模拟服务端没有相应接口，因此不会同步到其他设备或真实管理员。</p>
+        <div class="info-heading service-desk-heading"><div><span class="section-index">RESERVATION / SERVICE DESK</span><h2 id="serviceDeskTitle">预约与设备服务</h2><p>预约、报修、维护与公告保存在云端，并按账号权限显示。</p></div><span class="local-badge">云端记录</span></div>
+        <p class="workflow-feedback" id="workflowFeedback" role="status" aria-live="polite"></p>
+
         <div class="service-user-grid">
           <section class="service-card reservation-center" aria-labelledby="reservationCenterTitle">
             <div class="service-card-heading"><div><span class="section-index">MY DESK</span><h3 id="reservationCenterTitle">我的预约</h3></div><span id="reservationCount" class="count-pill">0 条</span></div>
@@ -209,54 +215,52 @@
               <label for="issueType">问题类型</label><select id="issueType"><option>设备故障</option><option>配件缺失</option><option>使用安全</option><option>其他问题</option></select>
               <label for="issueDescription">问题描述</label><textarea id="issueDescription" rows="3" maxlength="240" placeholder="请描述现象、发生时间或缺少的配件" required></textarea>
               <button class="secondary-button" type="submit">提交问题记录</button>
-              <p class="workflow-helper">本地记录用于演示报修闭环；发现安全隐患时，请立即联系设备管理员。</p>
+              <p class="workflow-helper">问题会提交给管理员跟进；发现安全隐患时，请同时联系设备管理员。</p>
             </form>
-            <div class="waitlist-box"><div><strong>找不到合适时段？</strong><p>加入候补后，当本地演示中出现空档会提醒你重新确认。</p></div><button type="button" class="secondary-button" id="joinWaitlist">加入所选设备候补</button></div>
+            <div class="waitlist-box"><div><strong>找不到合适时段？</strong><p>登记设备和日期，候补名单会保存在账号下。</p></div><label for="waitlistDevice">设备</label><select id="waitlistDevice" aria-label="候补设备"><option value="">选择设备</option></select><label for="waitlistDate">日期</label><input id="waitlistDate" type="date" /><button type="button" class="secondary-button" id="joinWaitlist">加入候补</button></div>
+            <div id="myWaitlist" class="compact-record-list"></div>
             <div id="myIssueList" class="compact-record-list"></div>
           </section>
         </div>
-        <section class="service-card coordination-board" aria-labelledby="coordinationBoardTitle"><div class="service-card-heading"><div><span class="section-index">SHARED SLOTS</span><h3 id="coordinationBoardTitle">开放协调的时段</h3><p>预约者主动开放后，其他演示账号可申请协商；不展示联系方式。</p></div></div><div id="openCoordinationList" class="coordination-board-list"><p class="workflow-empty">当前没有开放协调的预约。</p></div></section>
+        <section class="service-card coordination-board" aria-labelledby="coordinationBoardTitle"><div class="service-card-heading"><div><span class="section-index">SHARED SLOTS</span><h3 id="coordinationBoardTitle">开放协调的时段</h3><p>预约者主动开放后，其他已注册用户可联系；不展示联系方式。</p></div></div><div id="openCoordinationList" class="coordination-board-list"><p class="workflow-empty">当前没有开放协调的预约。</p></div></section>
         <section class="service-card admin-service" id="adminService" hidden aria-label="管理员设备服务工作台">
-          <div class="service-card-heading"><div><span class="section-index">ADMIN / OPERATIONS</span><h3>设备服务工作台</h3><p>处理本地演示报修、登记维护安排并发布项目公告。</p></div><span class="local-badge">管理员本机处理</span></div>
+          <div class="service-card-heading"><div><span class="section-index">ADMIN / OPERATIONS</span><h3>设备服务工作台</h3><p>处理云端报修、登记维护安排并发布项目公告。</p></div><span class="local-badge">管理员权限</span></div>
           <div class="admin-service-grid">
+            <section><h4>设备档案</h4><form id="equipmentEditForm" class="workflow-form compact-form"><label for="equipmentEditDevice">设备</label><select id="equipmentEditDevice" required><option value="">选择设备</option></select><label for="equipmentCategory">类别</label><input id="equipmentCategory" maxlength="60" placeholder="如：影像设备"><label for="equipmentLocation">存放位置</label><input id="equipmentLocation" maxlength="120" placeholder="楼宇、房间或柜号"><label for="equipmentModel">品牌与型号</label><input id="equipmentModel" maxlength="120"><label for="equipmentHours">开放时段</label><input id="equipmentHours" maxlength="80" placeholder="工作日 09:00—18:00"><label for="equipmentDuration">单次最长借用（分钟）</label><input id="equipmentDuration" type="number" min="1" max="10080"><label for="equipmentStatusNote">状态备注</label><input id="equipmentStatusNote" maxlength="160" placeholder="可留空"><label for="equipmentDescription">设备说明</label><textarea id="equipmentDescription" rows="3" maxlength="500"></textarea><button class="secondary-button" type="submit">保存档案</button></form></section>
             <section><h4>待处理的问题记录</h4><div id="adminIssueList" class="workflow-list"><p class="workflow-empty">暂无问题记录。</p></div></section>
             <section><h4>维护安排</h4><form id="maintenanceForm" class="workflow-form compact-form"><label for="maintenanceDevice">设备</label><select id="maintenanceDevice" required><option value="">先加载设备目录</option></select><label for="maintenanceDate">维护日期</label><input id="maintenanceDate" type="date" required><label for="maintenanceNote">维护内容</label><input id="maintenanceNote" maxlength="120" required placeholder="例：更换电池并进行安全检查"><button class="secondary-button" type="submit">发布维护安排</button></form><div id="maintenanceList" class="compact-record-list"></div></section>
             <section><h4>发布项目公告</h4><form id="noticeForm" class="workflow-form compact-form"><label for="noticeCategory">公告类型</label><select id="noticeCategory"><option>设备维护</option><option>设备故障</option><option>使用提醒</option><option>项目更新</option></select><label for="noticeTitle">标题</label><input id="noticeTitle" maxlength="60" required placeholder="写清楚对使用者的影响"><label for="noticeBody">公告内容</label><textarea id="noticeBody" rows="3" maxlength="240" required placeholder="说明涉及设备、时间和处理进度"></textarea><button class="secondary-button" type="submit">发布公告</button></form><div id="adminNoticeList" class="compact-record-list"></div></section>
           </div>
           <section class="service-analytics"><div><span class="section-index">LOCAL SERVICE ANALYTICS</span><h4>服务运行概览</h4></div><div id="serviceMetrics" class="service-metrics"></div></section>
         </section>
-        <section class="service-card notice-board" aria-labelledby="noticeBoardTitle"><div class="service-card-heading"><div><span class="section-index">BULLETIN</span><h3 id="noticeBoardTitle">设备公告与维护日历</h3></div><span class="workflow-helper">按本地演示数据更新</span></div><div id="publicNoticeList" class="notice-board-list"><p class="workflow-empty">暂无公告。</p></div><div class="public-maintenance"><h4>近期维护</h4><div id="publicMaintenanceList" class="notice-board-list"><p class="workflow-empty">暂无维护安排。</p></div></div></section>
+        <section class="service-card notice-board" aria-labelledby="noticeBoardTitle"><div class="service-card-heading"><div><span class="section-index">BULLETIN</span><h3 id="noticeBoardTitle">设备公告与维护日历</h3></div><span class="workflow-helper">云端更新</span></div><div id="publicNoticeList" class="notice-board-list"><p class="workflow-empty">暂无公告。</p></div><div class="public-maintenance"><h4>近期维护</h4><div id="publicMaintenanceList" class="notice-board-list"><p class="workflow-empty">暂无维护安排。</p></div></div></section>
       </section>
 
       <section class="info-section guide-section" id="guide" aria-labelledby="guideTitle">
         <div class="info-heading"><div><span class="section-index">USER GUIDE</span><h2 id="guideTitle">使用说明</h2><p>按“找设备—看日期—提交预约—确认结果”的顺序完成借用。</p></div><span class="info-index">01—05</span></div>
         <div class="guide-steps">
-          <article class="guide-step"><span>01</span><div><h3>登录并查找设备</h3><p>使用课程提供的演示身份进入工作台，在“设备一览”按名称或编号搜索。点击“设备详情”查看服务端提供的编号、类别、说明和状态。</p></div></article>
-          <article class="guide-step"><span>02</span><div><h3>查看日期登记</h3><p>选中设备后，在日历选择日期。日历标记表示服务端记录；“暂无登记”仅代表当前接口没有返回该日记录，不保证设备无故障或全天可借。</p></div></article>
-          <article class="guide-step"><span>03</span><div><h3>核对时段与设备状态</h3><p>查看登记时段、预计时长和设备状态。课程接口未提供的字段会明确标为“未提供”，提交预约前应向管理员确认可借时间及设备状况。</p></div></article>
-          <article class="guide-step"><span>04</span><div><h3>提交预约并跟进进度</h3><p>选择日期后填写时段和用途。服务端负责检查日期冲突，“我的预约”还会显示本机演示的时段、处理状态和交接记录；两类信息会分别标明来源。</p></div></article>
-          <article class="guide-step"><span>05</span><div><h3>处理交接与使用协调</h3><p>在“预约与设备服务”完成取还检查。预约时勾选开放协调后，同一浏览器的演示账号可提交时段请求；接受调整后仍需核对课程服务端的原始预约。</p></div></article>
+          <article class="guide-step"><span>01</span><div><h3>登录并查找设备</h3><p>使用已验证邮箱登录工作台，在“设备一览”按名称或编号搜索。点击“设备详情”查看管理员已登记的编号、类别、说明和状态。</p></div></article>
+          <article class="guide-step"><span>02</span><div><h3>查看日期登记</h3><p>选中设备后，在日历选择日期。日历标记表示云端预约；无预约记录不代表设备已完成故障检查。</p></div></article>
+          <article class="guide-step"><span>03</span><div><h3>核对时段与设备状态</h3><p>查看登记时段、预计时长和设备状态。只展示设备档案中实际登记的字段；提交预约前应向管理员确认可借时间及设备状况。</p></div></article>
+          <article class="guide-step"><span>04</span><div><h3>提交预约并跟进进度</h3><p>选择日期后填写时段和用途。数据库负责检查日期和时段冲突，“我的预约”还会显示云端时段、处理状态和预约记录；两类信息会分别标明来源。</p></div></article>
+          <article class="guide-step"><span>05</span><div><h3>处理交接与使用协调</h3><p>在“预约与设备服务”提交报修或候补登记。预约时允许其他用户联系后，可在私有会话里协商；预约变更仍由预约者提交。</p></div></article>
         </div>
-        <details class="guide-faq"><summary>网页打不开或显示离线时怎么处理？</summary><p>先按项目 README 启动课程模拟服务端，再用本地 HTTP 服务器打开网页。若服务端地址能打开但页面仍离线，检查浏览器 Console 中的跨域错误，并按课程环境要求设置服务端来源权限。</p></details>
+        <details class="guide-faq"><summary>网页打不开或显示离线时怎么处理？</summary><p>检查 Supabase 项目 URL、publishable key、数据库 migration 和认证回调地址。正式站点使用 HTTPS；本地调试时可用 Python 静态服务器打开页面。</p></details>
       </section>
 
       <section class="info-section notices-section" id="notices" aria-labelledby="noticesTitle">
         <div class="info-heading"><div><span class="section-index">SITE UPDATES</span><h2 id="noticesTitle">项目公告</h2><p>记录本项目功能调整、设备状态信息和使用提醒。</p></div><span class="info-index">UPDATES</span></div>
-        <div class="notice-grid">
-          <article class="notice-card notice-feature"><span class="notice-tag">预约服务 · 2026.10</span><h3>预约进度与交接集中管理</h3><p>“我的预约”展示演示状态、用途、时段与交接清单；预约日期仍以课程服务端响应为准，本地进度不等同于服务端审批结果。</p></article>
-          <article class="notice-card"><span class="notice-tag">设备维护</span><h3>报修与维护安排进入服务工作台</h3><p>使用者可登记故障、配件缺失和安全问题；管理员可接手处理、暂停演示预约并发布维护日期。处理记录仅保存在当前浏览器。</p></article>
-          <article class="notice-card"><span class="notice-tag">时段协调</span><h3>预约可发起本机演示协商</h3><p>预约所有者可选择开放协调。对方接受建议后，演示时段会更新，同时保留原始服务端日期，方便双方检查课程服务端登记。</p></article>
-        </div>
+        <div class="notice-grid" id="noticeGrid"><p class="workflow-empty">登录后查看管理员发布的项目公告。</p></div>
       </section>
 
-      <footer class="site-footer"><span>物尽其用 <i>·</i> 校园共享设备预约与使用登记</span><span id="offlineNote">数据由课程模拟服务端提供</span><a href="#home">回到首页 ↑</a></footer>
+      <footer class="site-footer"><span>物尽其用 <i>·</i> 校园共享设备预约与使用登记</span><span id="offlineNote">数据由预约云端提供</span><a href="#home">回到首页 ↑</a></footer>
     </main>
   </div>
 
   <dialog class="booking-dialog" id="bookingDialog" aria-labelledby="bookingTitle">
     <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭">×</button></form>
     <span class="section-index">REQUEST / RESERVATION</span><h2 id="bookingTitle">提交设备预约</h2>
-    <p class="dialog-intro">选择一件设备和最多五个日期，并填写时段与用途。时段冲突由本地演示记录预检，整日预约仍由课程服务端判定。</p>
+    <p class="dialog-intro">选择设备与日期并填写时段和用途。预约时间冲突和设备维护由云端数据库校验。</p>
     <form id="bookingForm">
       <label class="field-label" for="bookingDevice">预约设备</label><select id="bookingDevice" required></select>
       <label class="field-label" for="bookingDatePicker">预约日期 <span>最多 5 天</span></label>
@@ -264,28 +268,17 @@
       <div class="selected-dates" id="selectedDates"></div>
       <div class="booking-slot-grid"><div><label class="field-label" for="bookingStartTime">开始时间</label><input id="bookingStartTime" type="time" value="09:00" required></div><div><label class="field-label" for="bookingEndTime">结束时间</label><input id="bookingEndTime" type="time" value="11:00" required></div></div>
       <label class="field-label" for="bookingPurpose">使用用途</label><input id="bookingPurpose" maxlength="100" placeholder="简要说明用途，便于管理员了解需求" required>
-      <label class="coordination-optin"><input id="bookingCoordination" type="checkbox"><span>允许其他演示账号向我发送时段协调请求</span></label>
+      <label class="coordination-optin"><input id="bookingCoordination" type="checkbox"><span>允许其他已注册用户联系我协商预约</span></label>
       <div id="slotSuggestions" class="slot-suggestions" aria-live="polite"></div>
       <p class="form-message" id="bookingMessage" role="status"></p>
       <div class="dialog-actions"><button type="button" class="secondary-button" id="cancelBooking">取消</button><button type="submit" class="primary-button" id="submitBooking">提交预约</button></div>
     </form>
   </dialog>
-  <dialog class="booking-dialog coordination-dialog" id="coordinationDialog" aria-labelledby="coordinationDialogTitle">
-    <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭协调申请">×</button></form>
-    <span class="section-index">TIME / COORDINATION</span><h2 id="coordinationDialogTitle">申请协商时段</h2>
-    <p class="dialog-intro" id="coordinationTargetLabel">向预约者提出新的日期与时段，对方同意后会更新本机演示记录。</p>
-    <form id="coordinationForm">
-      <label class="field-label" for="coordinationDate">希望使用日期</label><input id="coordinationDate" type="date" required>
-      <div class="booking-slot-grid"><div><label class="field-label" for="coordinationStart">开始时间</label><input id="coordinationStart" type="time" value="09:00" required></div><div><label class="field-label" for="coordinationEnd">结束时间</label><input id="coordinationEnd" type="time" value="11:00" required></div></div>
-      <label class="field-label" for="coordinationNote">补充说明</label><textarea id="coordinationNote" rows="2" maxlength="100" placeholder="可说明希望调整的原因"></textarea>
-      <p class="form-message" id="coordinationMessage" role="status"></p>
-      <div class="dialog-actions"><button type="button" class="secondary-button" id="closeCoordination">取消</button><button type="submit" class="primary-button">发送申请</button></div>
-    </form>
-  </dialog>
+
   <dialog class="device-detail-dialog" id="deviceDetailDialog" aria-labelledby="deviceDetailTitle">
     <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭设备详情">×</button></form>
     <span class="section-index">DEVICE / DETAIL</span><h2 id="deviceDetailTitle">设备详情</h2>
-    <p class="dialog-intro" id="deviceDetailIntro">设备信息来自课程模拟服务端。</p>
+    <p class="dialog-intro" id="deviceDetailIntro">设备信息来自预约云端。</p>
     <div class="device-detail-grid" id="deviceDetailGrid"></div>
     <div class="detail-status-note" id="deviceDetailNote"></div>
     <div class="dialog-actions"><button type="button" class="secondary-button" id="detailContactButton">联系登记人</button><button type="button" class="secondary-button" id="detailHistoryButton">查看登记历史</button><button type="button" class="primary-button" id="detailReserveButton">预约这件设备</button></div>
@@ -293,11 +286,11 @@
   <dialog class="device-detail-dialog contact-dialog" id="contactDialog" aria-labelledby="contactTitle">
     <form method="dialog" class="dialog-close-form"><button class="icon-button close-dialog" aria-label="关闭沟通说明">×</button></form>
     <span class="section-index">CONTACT / COORDINATION</span><h2 id="contactTitle">沟通与使用协调</h2>
-    <p class="dialog-intro">课程模拟服务端没有站内消息接口。时段协商可在“预约与设备服务”的预约卡片中发起；该能力仅在同一浏览器的演示账号之间记录。</p>
-    <div class="chat-panel" aria-label="预约沟通窗口预览">
-      <div class="chat-thread"><div class="chat-system-message"><span aria-hidden="true">i</span><p id="contactStatusText">课程服务端未提供真实身份和消息接口。请通过预约卡片的“申请协调时段”发送本地演示请求，安全或设备问题仍请联系课程管理员。</p></div></div>
-      <div class="chat-composer"><textarea disabled rows="2" placeholder="预约卡片中发送时段协调请求"></textarea><button type="button" class="primary-button" disabled>发送</button></div>
-      <p class="chat-privacy-note">本地协商不等于真实聊天或服务端预约变更；部署真实消息功能需增加身份认证、会话和消息授权。</p>
+    <p class="dialog-intro" id="contactStatusText">仅显示当前账号参与的预约沟通。消息由云端保存，并按会话成员授权。</p>
+    <div class="chat-panel" aria-label="预约沟通窗口">
+      <div class="chat-thread" id="chatThread" aria-live="polite"><p class="chat-empty">选择一条预约沟通后查看消息。</p></div>
+      <form class="chat-composer" id="chatForm"><label class="sr-only" for="chatMessage">消息内容</label><textarea id="chatMessage" rows="2" maxlength="1000" placeholder="写下消息…" required></textarea><button type="submit" class="primary-button">发送</button></form>
+      <p class="chat-privacy-note" id="chatPrivacyNote">请勿在消息中发送密码、验证码等敏感信息。</p>
     </div>
     <div class="dialog-actions"><button type="button" class="primary-button" id="closeContactDialog">知道了</button></div>
   </dialog>

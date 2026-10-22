@@ -2328,6 +2328,28 @@ body:not(.is-authenticated) .page-shell { display:none }
 .contact-dialog .dialog-actions .primary-button { width:auto;min-width:110px }
 .primary-button:hover:not(:disabled) { background:#557c96;filter:none }
 .primary-button:disabled { background:#9aaeb8;color:#f8fafb }
+.auth-links { display:flex;justify-content:space-between;gap:12px;margin-top:16px }
+.auth-links button { padding:6px 0;border:0;background:transparent;color:#668ca6;cursor:pointer;font-size:12px }
+.auth-links button:hover { color:#405f73;text-decoration:underline }
+.auth-links[hidden] { display:none }
+.auth-setup-note { margin:18px 0 0;padding:12px 14px;border-left:3px solid #b8875f;background:#f6efe5;color:#766d5e;font-size:12px;line-height:1.8 }
+.login-error.is-success { color:#4e7966 }
+.login-error.is-error { color:#a74f3a }
+#loginForm [hidden] { display:none!important }
+.chat-panel { display:flex;min-height:440px;max-height:min(68vh,700px);flex-direction:column;gap:12px;margin-top:17px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#f5f1e8 }
+.chat-thread { display:flex;min-height:300px;flex:1;flex-direction:column;gap:10px;overflow:auto;padding:10px 7px }
+.chat-empty { margin:auto;color:#898579;font-size:13px;text-align:center;line-height:1.8 }
+.chat-message { max-width:min(78%,520px);align-self:flex-start;padding:10px 13px;border:1px solid #e3dbcd;border-radius:12px 12px 12px 3px;background:#fffdf8;box-shadow:0 3px 10px rgba(48,42,30,.04) }
+.chat-message.mine { align-self:flex-end;border-color:#c9d8d8;border-radius:12px 12px 3px 12px;background:#eaf1ef }
+.chat-message p { margin:0;color:#4f514c;font-size:13px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap }
+.chat-message time { display:block;margin-top:5px;color:#989286;font-size:10px;text-align:right }
+.chat-composer { display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid #e1d8c9;border-radius:9px;background:#fffdf8 }
+.chat-composer textarea { width:100%;min-height:54px;max-height:140px;resize:vertical;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:13px;line-height:1.6 }
+.chat-composer .primary-button { width:auto;min-width:84px;min-height:40px;flex:0 0 auto }
+.chat-privacy-note { margin:0 4px;color:#928b7f;font-size:10px;line-height:1.6 }
+.contact-unavailable { color:#aaa496 }
+.admin-device-state { grid-column:5;grid-row:1;justify-self:end;max-width:118px;border:1px solid #ded6c8;cursor:pointer }
+.admin-device-state:focus { outline:2px solid rgba(102,140,166,.25) }
 
 @media(max-width:1000px) {
   .login-shell { padding:22px 24px 18px }
@@ -2345,6 +2367,9 @@ body:not(.is-authenticated) .page-shell { display:none }
   .reservation-receipt time { grid-column:1/-1 }
   .device-detail-dialog { padding:24px 18px }
   .device-detail-dialog .dialog-actions button { flex:1 }
+  .chat-panel { min-height:58vh;padding:8px }
+  .chat-thread { min-height:35vh }
+  .chat-message { max-width:90% }
 }
 @media(max-width:480px) {
   .login-shell { padding:14px 14px 12px }
@@ -2360,4 +2385,23 @@ body:not(.is-authenticated) .page-shell { display:none }
   .detail-item:last-child { grid-column:auto }
   .device-detail-dialog .dialog-actions { flex-direction:column-reverse }
   .device-detail-dialog .dialog-actions button { width:100% }
+}
+
+/* Cloud-backed account and service views */
+.admin-device-row { grid-template-columns:18px minmax(0,1fr) auto auto minmax(105px,auto) }
+.admin-device-state { grid-column:5;grid-row:1;justify-self:end;max-width:118px;border:1px solid #ded6c8;cursor:pointer }
+.admin-device-state:focus { outline:2px solid rgba(102,140,166,.25) }
+.workflow-feedback { display:none;margin:10px 0;padding:10px 13px;border-radius:7px;background:#edf3ed;color:#547060;font-size:12px;line-height:1.6 }
+.workflow-feedback.is-visible { display:block }
+.workflow-feedback.is-error { background:#f8e9e1;color:#985941 }
+.waitlist-box { display:grid;grid-template-columns:minmax(140px,1fr) minmax(130px,1fr) minmax(130px,1fr) auto;align-items:end }
+.waitlist-box>div { grid-column:1/-1 }
+.waitlist-box label { display:block;color:#746d60;font-size:11px }
+.waitlist-box select,.waitlist-box input { width:100%;min-height:38px;padding:8px 10px;border:1px solid #ded5c7;border-radius:6px;background:#fffdf8;color:var(--ink);font:inherit;font-size:12px }
+.waitlist-box .secondary-button { min-height:38px;white-space:nowrap }
+@media(max-width:540px) {
+  .admin-device-row { grid-template-columns:18px minmax(0,1fr) auto;gap:7px;padding:8px }
+  .admin-device-state { grid-column:2/-1;grid-row:2;justify-self:start }
+  .waitlist-box { grid-template-columns:1fr }
+  .waitlist-box>div { grid-column:auto }
 }
