@@ -2071,6 +2071,136 @@ body:not(.is-authenticated) .page-shell { display:none }
   .guide-step h3 { font-size:15px }
 }
 
+/* Reservation and equipment-care workflows */
+.service-desk { margin:52px 0 0;padding:34px;border:1px solid #d9cbb6;border-radius:12px;background:rgba(255,250,242,.72) }
+.service-desk-heading { margin-bottom:14px }
+.service-desk-heading h2 { margin:7px 0 8px;font-family:"Songti SC","Noto Serif SC",serif;font-size:31px;font-weight:600 }
+.service-demo-note { margin:0 0 22px;padding:11px 14px;border-left:3px solid #87a6bf;background:#f0f5f5;color:#6d7774;font-size:11px;line-height:1.75 }
+.service-user-grid { display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.85fr);gap:16px;align-items:start }
+.service-card { min-width:0;padding:21px;border:1px solid #ded4c5;border-radius:10px;background:#fffdf9;box-shadow:0 8px 28px rgba(79,63,43,.035) }
+.service-card-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px }
+.service-card-heading h3 { margin:5px 0 0;color:#474b44;font-family:"Songti SC","Noto Serif SC",serif;font-size:21px;font-weight:600 }
+.service-card-heading p { margin:5px 0 0;color:#858176;font-size:11px;line-height:1.6 }
+.count-pill { padding:5px 9px;border:1px solid #d8e1df;border-radius:99px;background:#f3f7f5;color:#628078;font-size:10px;white-space:nowrap }
+.reservation-filters { display:flex;gap:5px;margin-bottom:12px;padding:4px;width:max-content;border:1px solid #e1d9cc;border-radius:99px;background:#f7f2e9 }
+.reservation-filters button { padding:6px 12px;border:0;border-radius:99px;background:transparent;color:#7c786f;font-size:10px;cursor:pointer }
+.reservation-filters button.is-active { background:#668ca6;color:#fff }
+.workflow-list { display:grid;gap:10px }
+.workflow-empty { margin:0;padding:18px 12px;border:1px dashed #d9d1c4;border-radius:8px;color:#918b80;font-size:11px;line-height:1.7;text-align:center }
+.workflow-reservation { padding:15px;border:1px solid #e4ddd1;border-radius:9px;background:linear-gradient(135deg,#fffdf9,#f8f6ef) }
+.workflow-reservation-top,.workflow-reservation-main,.workflow-reservation-meta { display:flex;align-items:center;justify-content:space-between;gap:10px }
+.workflow-reservation-top time,.reservation-owner,.workflow-source-note { color:#979084;font-size:9px }
+.workflow-status { display:inline-flex;padding:4px 8px;border-radius:99px;background:#f3eadb;color:#8c7049;font-size:9px;white-space:nowrap }
+.status-confirmed { background:#e5f0e8;color:#568067 }
+.status-cancel_requested { background:#f7e9df;color:#9a654b }
+.status-completed,.status-cancelled,.status-withdrawn { background:#eeeee9;color:#76786f }
+.workflow-reservation-main { justify-content:flex-start;margin-top:10px }
+.workflow-reservation-main h4 { margin:0;color:#4a4d46;font-family:"Songti SC","Noto Serif SC",serif;font-size:17px }
+.workflow-reservation-main span { color:#8c887d;font-size:10px }
+.workflow-reservation-meta { justify-content:flex-start;gap:16px;margin-top:8px;color:#77796f;font-size:11px }
+.workflow-reservation-meta strong { color:#52758b;font-size:12px }
+.reservation-purpose { margin:9px 0 0;color:#77766e;font-size:10px }
+.workflow-source-note { margin:8px 0 0;line-height:1.6 }
+.reservation-actions { display:flex;flex-wrap:wrap;gap:7px;margin-top:9px }
+.text-button { padding:6px 9px;border:1px solid #d8e1e2;border-radius:6px;background:#f4f8f8;color:#5d7b8c;font-size:10px;cursor:pointer }
+.text-button:hover { border-color:#93aeb9;background:#edf4f4 }
+.handoff-box { margin-top:12px;padding:11px;border:1px solid #e3ded2;border-radius:7px;background:#f8f6f0 }
+.handoff-box>strong { color:#65665f;font-size:10px }
+.handoff-checks { display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px }
+.handoff-checks label,.coordination-optin { display:flex;align-items:center;gap:6px;color:#77776e;font-size:10px }
+.handoff-checks input,.coordination-optin input { accent-color:#668c85 }
+.handoff-return { display:flex;gap:7px;margin-top:9px }
+.handoff-return input { flex:1;min-width:0;padding:7px 9px;border:1px solid #ddd6ca;border-radius:6px;background:#fffdf9;font-size:10px }
+.coordination-request { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:10px;border:1px solid #dfd5bd;border-radius:7px;background:#faf5e9 }
+.coordination-request strong { color:#645a47;font-size:10px }
+.coordination-request p { margin:5px 0 0;color:#817868;font-size:10px }
+.coordination-request>div:last-child { display:flex;gap:5px }
+.coordination-board { margin-top:16px }
+.coordination-board-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px }
+.open-slot-card { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #dfe3d9;border-radius:8px;background:#f8f8f2 }
+.open-slot-card h4 { margin:8px 0 4px;color:#51564e;font-family:"Songti SC","Noto Serif SC",serif;font-size:16px }
+.open-slot-card p { margin:0 0 5px;color:#607889;font-size:11px }
+.open-slot-card small { color:#908b80;font-size:9px;line-height:1.5 }
+.open-slot-card .secondary-button { flex:none;padding:8px 11px;font-size:10px }
+.open-slot-card .secondary-button:disabled { cursor:default;opacity:.6 }
+.workflow-form { display:grid;gap:8px }
+.workflow-form label,.field-label { color:#686a62;font-size:10px;font-weight:600 }
+.workflow-form input,.workflow-form select,.workflow-form textarea,.booking-dialog input:not([type=checkbox]),.booking-dialog select { width:100%;padding:9px 10px;border:1px solid #dcd4c7;border-radius:6px;background:#fffdf9;color:#50544e;font-size:11px;outline:none }
+.workflow-form textarea { resize:vertical;line-height:1.6 }
+.workflow-form input:focus,.workflow-form select:focus,.workflow-form textarea:focus,.booking-dialog input:focus { border-color:#8eacb2;box-shadow:0 0 0 3px rgba(102,140,166,.1) }
+.workflow-form .secondary-button { justify-self:start;margin-top:3px }
+.workflow-helper { margin:2px 0;color:#938d81;font-size:9px;line-height:1.65 }
+.waitlist-box { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;padding:12px;border:1px solid #dce4e0;border-radius:8px;background:#f2f6f3 }
+.waitlist-box strong { color:#5e7169;font-size:11px }
+.waitlist-box p { margin:4px 0 0;color:#8a8b81;font-size:9px;line-height:1.5 }
+.waitlist-box .secondary-button { flex:none;padding:8px 10px;font-size:10px }
+.compact-record-list { display:grid;gap:8px;margin-top:12px }
+.compact-record { padding:10px 11px;border:1px solid #e6e0d5;border-radius:7px;background:#fffefa }
+.compact-record>div { display:flex;justify-content:space-between;gap:8px }
+.compact-record strong { color:#5b5d55;font-size:10px }
+.compact-record span,.compact-record small { color:#969083;font-size:9px }
+.compact-record p { margin:6px 0;color:#79796f;font-size:10px;line-height:1.6 }
+.admin-service { margin-top:17px;background:#f5f7f4 }
+.admin-service-grid { display:grid;grid-template-columns:1.25fr .9fr .9fr;gap:13px }
+.admin-service-grid>section { min-width:0;padding:14px;border:1px solid #e0e3dc;border-radius:8px;background:#fffefa }
+.admin-service-grid h4,.service-analytics h4 { margin:0 0 12px;color:#5b625b;font-family:"Songti SC","Noto Serif SC",serif;font-size:15px }
+.compact-form { gap:7px }
+.compact-form .secondary-button { padding:8px 10px;font-size:10px }
+.issue-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px;border:1px solid #e6ded1;border-radius:7px;background:#fffdf9 }
+.issue-row strong,.issue-row small { display:block;margin-top:6px }
+.issue-row strong { color:#555a52;font-size:11px }
+.issue-row small { color:#969084;font-size:9px }
+.issue-row p { margin:7px 0 0;color:#77766e;font-size:10px;line-height:1.65 }
+.issue-actions { display:flex;flex-direction:column;gap:5px;align-items:stretch }
+.issue-actions .text-button { white-space:nowrap }
+.service-analytics { display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:14px;padding:15px;border:1px solid #dce2de;border-radius:8px;background:#edf3f0 }
+.service-analytics h4 { margin:4px 0 0 }
+.service-metrics { display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));gap:8px;width:min(680px,72%) }
+.service-metric { display:grid;gap:4px;padding:10px;border:1px solid #d9e1dc;border-radius:7px;background:#fffdf8;text-align:center }
+.service-metric strong { color:#527b72;font-family:"Songti SC","Noto Serif SC",serif;font-size:20px }
+.service-metric span { color:#88877e;font-size:9px }
+.notice-board { margin-top:16px }
+.notice-board-list { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px }
+.public-notice { padding:13px;border:1px solid #e5ddd0;border-radius:8px;background:#faf8f1 }
+.public-notice time { float:right;color:#989183;font-size:9px }
+.public-notice h4 { margin:11px 0 6px;color:#51554e;font-family:"Songti SC","Noto Serif SC",serif;font-size:15px }
+.public-notice p { margin:0;color:#77776e;font-size:10px;line-height:1.7 }
+.public-notice small { display:block;margin-top:9px;color:#9a958a;font-size:9px }
+.mini-notice { margin:0;padding:6px 0;border-bottom:1px solid #eee8dd;color:#77766e;font-size:9px;line-height:1.5 }
+.booking-slot-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px }
+.booking-slot-grid .field-label { display:block;margin-bottom:6px }
+.coordination-optin { margin:12px 0 }
+.slot-suggestions { display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px;color:#8e684d;font-size:10px }
+.slot-suggestions:empty { display:none }
+.slot-suggestions p { width:100%;margin:0 0 2px;line-height:1.6 }
+.slot-suggestion { padding:7px 10px;border:1px solid #d4dfdc;border-radius:99px;background:#edf4f1;color:#52776e;font-size:10px;cursor:pointer }
+.slot-suggestion:hover { border-color:#8caea4;background:#e4efea }
+.public-maintenance { margin-top:18px;padding-top:15px;border-top:1px solid #e6ded1 }
+.public-maintenance>h4 { margin:0 0 10px;color:#6f7068;font-family:"Songti SC","Noto Serif SC",serif;font-size:16px }
+.maintenance-notice { background:#f3f6f2 }
+.booking-dialog { width:min(520px,calc(100% - 28px));max-height:calc(100vh - 30px);overflow:auto;padding:28px;border:1px solid var(--line);border-radius:12px;background:var(--paper);color:var(--ink);box-shadow:0 20px 80px rgba(39,34,26,.22) }
+.booking-dialog::backdrop { background:rgba(38,39,32,.38);backdrop-filter:blur(3px) }
+
+@media(max-width:1000px) {
+  .service-desk { padding:24px }
+  .admin-service-grid { grid-template-columns:1fr 1fr }
+  .admin-service-grid>section:first-child { grid-column:1/-1 }
+}
+@media(max-width:760px) {
+  .service-user-grid,.admin-service-grid { grid-template-columns:1fr }
+  .admin-service-grid>section:first-child { grid-column:auto }
+  .service-analytics { align-items:stretch;flex-direction:column }
+  .service-metrics { width:100%;grid-template-columns:repeat(2,minmax(0,1fr)) }
+  .notice-board-list { grid-template-columns:1fr }
+  .coordination-board-list { grid-template-columns:1fr }
+  .service-desk { margin-top:30px;padding:19px 14px }
+  .service-card { padding:16px 13px }
+  .workflow-reservation-meta { align-items:flex-start;flex-direction:column;gap:5px }
+  .issue-row { grid-template-columns:1fr }
+  .issue-actions { flex-direction:row;flex-wrap:wrap }
+  .waitlist-box { align-items:flex-start;flex-direction:column }
+}
+
 /* Refined sign-in, device information, records and reservation feedback. */
 .login-screen {
   position:fixed;

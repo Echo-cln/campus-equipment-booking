@@ -7,7 +7,7 @@
   const calendarMinYear = Number((window.SITE_CONFIG || {}).calendarMinYear) || 2000;
   const calendarMaxYear = Number((window.SITE_CONFIG || {}).calendarMaxYear) || 2100;
   const state = {
-    role: "user", adminView: true,
+    role: "user", account: "student", adminView: true,
     page: 1, category: "全部", search: "", devices: [], allDevices: [], totalDevices: 0,
     selectedDeviceId: "", selectedDate: "", currentYear: today.getFullYear(),
     currentMonth: today.getMonth() + 1, calendarEvents: [], calendarReady: false, calendarDeviceId: "",
@@ -61,21 +61,10 @@
       const value = JSON.parse(localStorage.getItem("wu-jin-qi-yong:my-reservations") || "[]");
       state.myReservations = Array.isArray(value) ? value : [];
     } catch { state.myReservations = []; }
-    renderMyReservations();
   }
   function saveMyReservation(entry) {
     state.myReservations = [entry].concat(state.myReservations).slice(0, 30);
     try { localStorage.setItem("wu-jin-qi-yong:my-reservations", JSON.stringify(state.myReservations)); } catch { /* optional local receipt */ }
-    renderMyReservations();
-  }
-  function renderMyReservations() {
-    const node = $("#myReservationList");
-    if (!node) return;
-    if (!state.myReservations.length) {
-      node.innerHTML = '<p class="reservation-empty">提交预约后会显示在这里。</p>';
-      return;
-    }
-    node.innerHTML = state.myReservations.map((entry) => '<article class="reservation-receipt"><div><span class="receipt-state">已提交请求</span><strong>' + escapeHtml(entry.deviceName || entry.deviceId) + '</strong><small>设备编号 ' + escapeHtml(entry.deviceId) + '</small></div><p>' + (entry.dates || []).map(escapeHtml).join("、") + '</p><time>' + escapeHtml(entry.submittedAt || "") + '</time></article>').join("");
   }
   function initCalendarPicker() {
     const yearSelect = $("#calendarYear");
@@ -102,12 +91,14 @@
   }
   async function enterDemoSession(role, account, persist = true) {
     state.role = role;
+    state.account = account;
     state.adminView = role === "admin";
     if (persist) localStorage.setItem("wu-jin-qi-yong:demo-session", JSON.stringify({ role, account }));
     document.body.classList.add("is-authenticated");
     $("#loginScreen").hidden = true;
     $("#identityChip").textContent = "课程演示 · " + (role === "admin" ? "管理员" : "使用者");
     setRoleView();
+    window.FeatureDesk?.setContext({ role, account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
     if (!state.allDevices.length) await loadDevices();
     else if (role === "admin") { renderStatsDeviceOptions(); loadStatistics(); }
   }
@@ -205,8 +196,9 @@
       const id = deviceId(device);
       const available = isAvailable(device);
       const condition = deviceCondition(device);
-      const status = condition.unavailable ? condition.label : (available === null ? (condition.label === "服务端未提供" ? "状态待确认" : condition.label) : (available ? "服务端标记可用" : "当天已有登记"));
-      const statusClass = condition.unavailable ? "busy" : (available === null ? "unknown" : (available ? "" : "busy"));
+      const demoBlocked = !!window.FeatureDesk?.deviceBlocked(id);
+      const status = demoBlocked ? "本机演示暂停预约" : (condition.unavailable ? condition.label : (available === null ? (condition.label === "服务端未提供" ? "状态待确认" : condition.label) : (available ? "服务端标记可用" : "当天已有登记")));
+      const statusClass = demoBlocked || condition.unavailable ? "busy" : (available === null ? "unknown" : (available ? "" : "busy"));
       const palette = ["#e6ede4", "#f6e5d8", "#f4e8bc", "#dce9e8", "#e8e3d5"];
       return '<article class="device-card ' + (id === state.selectedDeviceId ? "selected" : "") + '" data-device="' + escapeHtml(id) + '" tabindex="0" role="button" aria-pressed="' + (id === state.selectedDeviceId) + '">' +
         '<div class="device-visual" style="--visual-bg:' + palette[((state.page - 1) * pageSize + index) % palette.length] + '"><span class="device-number">' + String((state.page - 1) * pageSize + index + 1).padStart(2, "0") + "</span>" + deviceIllustration(deviceCategory(device), index) + "</div>" +
@@ -242,6 +234,7 @@
       const result = await window.Service.getDevices();
       const payload = unwrap(result.data);
       state.allDevices = listFrom(payload, ["items", "devices", "list", "results", "rows"]);
+      window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
       state.statsSelection = state.statsSelection.filter((id) => state.allDevices.some((device) => deviceId(device) === id));
       state.devices = state.allDevices;
       state.totalDevices = filteredDevices().length;
@@ -253,6 +246,7 @@
       renderDevices();
       if (!state.selectedDeviceId && state.devices.length) {
         state.selectedDeviceId = deviceId(state.devices[0]);
+        window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
         renderDevices();
       }
       if (state.selectedDeviceId) await loadCalendar();
@@ -268,6 +262,7 @@
 
   async function selectDevice(id) {
     state.selectedDeviceId = id;
+    window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: id });
     state.currentHistoryDevice = null;
     state.usagePage = 1;
     renderDevices();
@@ -334,7 +329,7 @@
     const firstOffset = (first.getDay() + 6) % 7;
     let start = new Date(state.currentYear, state.currentMonth - 1, 1 - firstOffset);
     const events = new Map(state.calendarEvents.map((event) => [event.date, event]));
-    state.myReservations.filter((entry) => String(entry.deviceId) === String(state.selectedDeviceId)).forEach((entry) => {
+    state.myReservations.filter((entry) => String(entry.deviceId) === String(state.selectedDeviceId) && (state.role === "admin" || !entry.account || entry.account === state.account)).forEach((entry) => {
       (entry.dates || []).forEach((date) => {
         const existing = events.get(date) || {};
         events.set(date, { ...existing, date, booked: true, mine: true, localReceipt: true });
@@ -382,6 +377,7 @@
 
   async function handleDateSelection(date) {
     state.selectedDate = date;
+    window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: date, selectedDeviceId: state.selectedDeviceId });
     state.usagePage = 1;
     state.currentView = state.currentView || "month";
     $("#usageDate").textContent = prettyDate(date);
@@ -481,12 +477,13 @@
     state.detailDevice = device;
     const id = deviceId(device);
     const condition = deviceCondition(device);
+    const demoBlocked = !!window.FeatureDesk?.deviceBlocked(id);
     const currentDay = state.calendarDeviceId === id ? state.calendarEvents.find((event) => event.date === state.selectedDate) : null;
-    const localSubmitted = state.myReservations.some((entry) => String(entry.deviceId) === id && (entry.dates || []).includes(state.selectedDate));
+    const localSubmitted = state.myReservations.some((entry) => String(entry.deviceId) === id && (entry.dates || []).includes(state.selectedDate) && (state.role === "admin" || !entry.account || entry.account === state.account));
     const details = [
       ["设备名称", deviceName(device)], ["设备编号", id], ["设备类别", deviceCategory(device)],
       ["累计使用次数", deviceCount(device) + " 次"],
-      ["设备状态", condition.label],
+      ["设备状态", demoBlocked ? "本机演示已暂停预约" : condition.label],
       ["所在位置", field(device, ["location", "Location", "site", "Site", "room", "Room"], "")],
       ["品牌 / 型号", field(device, ["model", "Model", "brand", "Brand", "specification", "Specification"], "")],
       ["可借时段", field(device, ["availableTime", "AvailableTime", "timeRange", "TimeRange", "openingHours", "OpeningHours"], "")],
@@ -497,18 +494,20 @@
     $("#deviceDetailTitle").textContent = deviceName(device);
     $("#deviceDetailIntro").textContent = "设备编号 " + id + " · 详细字段来自服务端设备目录。";
     $("#deviceDetailGrid").innerHTML = details.map(([label, value]) => '<div class="detail-item"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(displayField(value)) + '</strong></div>').join("");
-    $("#deviceDetailNote").textContent = condition.unavailable
+    $("#deviceDetailNote").textContent = demoBlocked
+      ? "管理员已在本机演示中暂停预约，处理或解决故障记录后可恢复；课程服务端状态未修改。"
+      : condition.unavailable
       ? "服务端标记此设备为故障或停用状态，预约按钮已禁用。"
       : "预约接口只接收日期；如果没有返回时段、时长或设备状态，请先向管理员确认。";
-    $("#detailReserveButton").disabled = condition.unavailable || !window.Service.online || state.stale;
+    $("#detailReserveButton").disabled = demoBlocked || condition.unavailable || !window.Service.online || state.stale;
     $("#deviceDetailDialog").showModal();
   }
   function openContactDialog(borrower = "") {
     const name = String(borrower || "").trim();
     $("#contactTitle").textContent = name ? "与登记人沟通 · " + name : "沟通与使用协调";
     $("#contactStatusText").textContent = name
-      ? "接口返回了登记人名称，但没有站内消息的发送和接收接口，因此暂时不能在此处沟通。请通过课程指定渠道联系管理员。"
-      : "当前服务端未提供登记人身份和站内消息接口，消息发送暂不可用。请通过课程指定渠道联系管理员。";
+      ? "接口返回了登记人名称，但没有站内消息接口。若预约所有者开放协调，请在“预约与设备服务”的预约卡片中发起本机演示请求。"
+      : "课程服务端未提供登记人身份和站内消息接口。时段协商请从“预约与设备服务”中的预约卡片发起；故障或安全问题请联系课程管理员。";
     if ($("#deviceDetailDialog").open) $("#deviceDetailDialog").close();
     $("#contactDialog").showModal();
   }
@@ -533,13 +532,27 @@
     if (state.calendarDeviceId === state.selectedDeviceId && state.calendarEvents.some((item) => item.date === state.selectedDate && item.booked)) { notify("所选日期已有登记，请换一个日期"); return; }
     const selected = state.allDevices.find((device) => deviceId(device) === state.selectedDeviceId);
     if (selected && deviceCondition(selected).unavailable) { notify("该设备在服务端标记为故障或停用，暂不能预约"); return; }
+    if (window.FeatureDesk?.deviceBlocked(state.selectedDeviceId)) { notify("该设备在演示工作台中已暂停预约，请查看报修处理记录"); return; }
     state.bookingDates = [state.selectedDate];
     populateBookingDevices();
     renderBookingDates();
     $("#bookingDatePicker").value = state.selectedDate;
+    $("#bookingStartTime").value = "09:00";
+    $("#bookingEndTime").value = "11:00";
+    $("#bookingPurpose").value = "";
+    $("#bookingCoordination").checked = false;
+    $("#slotSuggestions").innerHTML = "";
     $("#bookingMessage").textContent = "可继续在日历中选择日期，最多五天。";
     $("#bookingMessage").className = "form-message";
     $("#bookingDialog").showModal();
+  }
+  function renderBookingAlternatives(deviceId, dates, startTime, endTime, message) {
+    $("#bookingMessage").textContent = message;
+    const slots = window.FeatureDesk?.alternatives(deviceId, dates) || [];
+    const devices = window.FeatureDesk?.recommendDevices(deviceId, dates, startTime, endTime) || [];
+    const slotHtml = slots.map((slot) => '<button type="button" class="slot-suggestion" data-slot-start="' + slot.start + '" data-slot-end="' + slot.end + '">' + slot.start + '—' + slot.end + '</button>').join("");
+    const deviceHtml = devices.map((device) => '<button type="button" class="slot-suggestion" data-alt-device="' + escapeHtml(device.id) + '">' + escapeHtml(device.name) + ' · ' + escapeHtml(device.id) + '</button>').join("");
+    $("#slotSuggestions").innerHTML = (slotHtml ? '<p>可尝试以下本地空档：</p>' + slotHtml : "") + (deviceHtml ? '<p>也可以查看其他候选设备：</p>' + deviceHtml : "") + (!slotHtml && !deviceHtml ? '<p>暂时没有本地可推荐的空档或设备，请更换日期或加入候补。</p>' : "");
   }
   async function submitBooking(event) {
     event.preventDefault();
@@ -558,6 +571,27 @@
       $("#bookingMessage").textContent = "该设备已被服务端标记为故障或停用，请选择其他设备。";
       return;
     }
+    if (window.FeatureDesk?.deviceBlocked(requestedDeviceId)) {
+      $("#bookingMessage").textContent = "该设备在本机演示中已暂停预约，请选择其他设备或联系管理员。";
+      return;
+    }
+    const startTime = $("#bookingStartTime").value;
+    const endTime = $("#bookingEndTime").value;
+    if (!startTime || !endTime || startTime >= endTime) {
+      $("#bookingMessage").textContent = "结束时间必须晚于开始时间。";
+      return;
+    }
+    const purpose = $("#bookingPurpose").value.trim();
+    if (!purpose) {
+      $("#bookingMessage").textContent = "请填写使用用途，便于后续确认。";
+      return;
+    }
+    const localCheck = window.FeatureDesk?.checkConflict(requestedDeviceId, requestedDates, startTime, endTime);
+    if (localCheck && !localCheck.ok) {
+      renderBookingAlternatives(requestedDeviceId, requestedDates, startTime, endTime, localCheck.message);
+      return;
+    }
+    $("#slotSuggestions").innerHTML = "";
     const button = $("#submitBooking");
     button.disabled = true;
     button.textContent = "正在提交…";
@@ -570,9 +604,21 @@
       const message = field(payload, ["message", "msg"], "服务端未返回冲突，预约请求已提交。");
       $("#bookingMessage").textContent = "提交成功：" + (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + "，" + requestedDates.join("、") + "。" + message;
       $("#bookingMessage").classList.add("success");
-      saveMyReservation({ deviceId: requestedDeviceId, deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId, dates: requestedDates, submittedAt: new Date().toLocaleString("zh-CN", { hour12: false }) });
+      saveMyReservation({ deviceId: requestedDeviceId, deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId, dates: requestedDates, account: state.account, submittedAt: new Date().toLocaleString("zh-CN", { hour12: false }) });
+      window.FeatureDesk?.addReservation({
+        deviceId: requestedDeviceId,
+        deviceName: requestedDevice ? deviceName(requestedDevice) : requestedDeviceId,
+        dates: requestedDates,
+        startTime,
+        endTime,
+        purpose,
+        account: state.account,
+        allowCoordination: $("#bookingCoordination").checked,
+        serviceSubmitted: true
+      });
       state.selectedDeviceId = requestedDeviceId;
       state.selectedDate = requestedDates[0];
+      window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
       $("#selectedDeviceLabel").textContent = (requestedDevice ? deviceName(requestedDevice) : requestedDeviceId) + " · " + requestedDeviceId;
       $("#usageDate").textContent = prettyDate(state.selectedDate);
       notify("预约已提交，结果记录在使用区下方");
@@ -582,9 +628,10 @@
       await loadCalendar();
       await loadDailyUsage();
     } catch (error) {
-      $("#bookingMessage").textContent = error.payload && (error.payload.message || error.payload.error)
+      const errorMessage = error.payload && (error.payload.message || error.payload.error)
         ? error.payload.message || error.payload.error
         : error.message;
+      renderBookingAlternatives(requestedDeviceId, requestedDates, startTime, endTime, errorMessage + " 也可参考下方本地推荐。");
       $("#bookingMessage").classList.remove("success");
       updateConnection(null);
     } finally {
@@ -799,6 +846,7 @@
     loadCalendar();
   }
   function bindEvents() {
+    document.addEventListener("workflow:update", () => renderDevices());
     $("#loginForm").addEventListener("submit", handleDemoLogin);
     $("#logoutButton").addEventListener("click", logoutDemo);
     $("#detailContactButton").addEventListener("click", () => openContactDialog());
@@ -904,7 +952,24 @@
     $("#bookingForm").addEventListener("submit", submitBooking);
     $("#cancelBooking").addEventListener("click", () => $("#bookingDialog").close());
     $("#bookingDialog").addEventListener("close", () => { state.bookingMode = false; renderCalendar(); });
-    $("#bookingDevice").addEventListener("change", (event) => { state.selectedDeviceId = event.target.value; loadCalendar(); });
+    $("#bookingDevice").addEventListener("change", (event) => { state.selectedDeviceId = event.target.value; window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId }); loadCalendar(); });
+    $("#slotSuggestions").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-slot-start]");
+      if (button) {
+        $("#bookingStartTime").value = button.dataset.slotStart;
+        $("#bookingEndTime").value = button.dataset.slotEnd;
+        $("#bookingMessage").textContent = "已填入建议时段，请重新提交预约。";
+        $("#slotSuggestions").innerHTML = "";
+        return;
+      }
+      const alternativeDevice = event.target.closest("[data-alt-device]");
+      if (alternativeDevice) {
+        $("#bookingDevice").value = alternativeDevice.dataset.altDevice;
+        state.selectedDeviceId = alternativeDevice.dataset.altDevice;
+        window.FeatureDesk?.setContext({ role: state.role, account: state.account, devices: state.allDevices, selectedDate: state.selectedDate, selectedDeviceId: state.selectedDeviceId });
+        notify("已切换候选设备；日期与时段保留，请重新提交前核对设备状态");
+      }
+    });
     $("#addBookingDate").addEventListener("click", () => {
       const date = $("#bookingDatePicker").value;
       if (!date) { notify("先选择一个日期"); return; }
